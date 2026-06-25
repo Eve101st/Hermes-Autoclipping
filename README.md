@@ -35,7 +35,7 @@ project.
 3. Recreate `.env` (it's gitignored, so not in the clone) — see keys below.
 4. Edit → `git commit` → `git push origin main` redeploys the Space automatically.
 
-Full step-by-step + prerequisites are in **`HANDOFF.md`**.
+Full technical reference (architecture, build, tools, services) is in **`CLAUDE.md`**.
 
 ## Local development
 

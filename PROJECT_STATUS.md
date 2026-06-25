@@ -55,8 +55,11 @@ above.
 
 ## Where to find the details
 
-- **`HANDOFF.md`** — the full technical version for whoever continues the coding.
-- **`README.md`** — short project description shown on the Space page.
+- **`CLAUDE.md`** — the single source of truth: architecture, hosting/git, build &
+  deploy, the pipeline tools, external services, and open items. (Replaces the old
+  `HANDOFF.md`, which was deleted 2026-06-26.)
+- **`README.md`** — HF Space config frontmatter + short blurb (kept because the
+  frontmatter is required for the Space to build).
 
 ---
 
