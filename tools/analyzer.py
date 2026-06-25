@@ -1,0 +1,119 @@
+"""Step 2 — clip analysis via NVIDIA Nemotron 3 Nano Omni on fal.
+
+Public API:
+    identify_moments(transcript)  -> list[{"start", "end", "reason"}]   (top 5)
+    analyze_clips(clip_paths)     -> list[{"clip", "start", "end",
+                                           "caption", "virality_score"}]
+
+`identify_moments` reasons over the transcript *text* (text endpoint).
+`analyze_clips` reasons over each rendered clip *video* (video endpoint); each
+local clip is uploaded to fal first to obtain a `video_url`.
+
+fal endpoint IDs (verified against https://fal.ai/nemotron):
+    text  : nvidia/nemotron-3-nano-omni
+    video : nvidia/nemotron-3-nano-omni/video
+
+⚠️ The video endpoint's input field name (`video_url`) follows fal's standard
+convention but was not runtime-verified. If a call returns HTTP 422, adjust
+`_VIDEO_INPUT_KEY` below to match the live schema.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+
+import config
+
+TEXT_ENDPOINT = "nvidia/nemotron-3-nano-omni"
+VIDEO_ENDPOINT = "nvidia/nemotron-3-nano-omni/video"
+_VIDEO_INPUT_KEY = "video_url"
+
+
+def _ensure_fal_key() -> None:
+    """fal_client reads FAL_KEY from the environment; make sure it's there."""
+    if not config.FAL_KEY:
+        raise RuntimeError(
+            "FAL_KEY is not set. Add it in the Space's Settings -> Variables and "
+            "secrets (or your local .env)."
+        )
+    os.environ.setdefault("FAL_KEY", config.FAL_KEY)
+
+
+def identify_moments(transcript: str) -> list[dict]:
+    """Return the five most clip-worthy 5-minute windows from a transcript."""
+    if not transcript or not transcript.strip():
+        raise ValueError("transcript is empty")
+    _ensure_fal_key()
+    import fal_client
+
+    prompt = (
+        "You are a short-form video producer. Below is a timestamped transcript "
+        "([HH:MM:SS] per line) of a long stream/video. Identify the FIVE most "
+        "clip-worthy 5-minute windows (high energy, emotional, funny, surprising, "
+        "or insightful moments).\n\n"
+        "Respond with ONLY a JSON array of exactly 5 objects, no prose, each:\n"
+        '{"start": "HH:MM:SS", "end": "HH:MM:SS", "reason": "<one sentence>"}\n'
+        "Each window should span ~5 minutes (end = start + 5 min).\n\n"
+        "TRANSCRIPT:\n"
+        f"{transcript}"
+    )
+
+    result = fal_client.subscribe(
+        TEXT_ENDPOINT, arguments={"prompt": prompt}, with_logs=False
+    )
+    moments = _extract_json(result.get("output", ""))
+    if not isinstance(moments, list):
+        raise ValueError(f"unexpected model output: {result.get('output')!r}")
+    return moments[:5]
+
+
+def analyze_clips(clip_paths: list[str]) -> list[dict]:
+    """For each rendered clip, pick the best 30-90s moment + caption + score."""
+    if not clip_paths:
+        return []
+    _ensure_fal_key()
+    import fal_client
+
+    prompt = (
+        "Watch this short video clip. Pick the single best 30-90 second moment for "
+        "a vertical short-form post. Respond with ONLY a JSON object, no prose:\n"
+        '{"start": "MM:SS", "end": "MM:SS", "caption": "<scroll-stopping caption '
+        'with hashtags>", "virality_score": <integer 0-100>}'
+    )
+
+    results: list[dict] = []
+    for path in clip_paths:
+        video_url = fal_client.upload_file(path)
+        result = fal_client.subscribe(
+            VIDEO_ENDPOINT,
+            arguments={"prompt": prompt, _VIDEO_INPUT_KEY: video_url},
+            with_logs=False,
+        )
+        data = _extract_json(result.get("output", ""))
+        if not isinstance(data, dict):
+            data = {"start": None, "end": None, "caption": "", "virality_score": 0}
+        data["clip"] = path
+        results.append(data)
+    return results
+
+
+def _extract_json(text: str):
+    """Best-effort JSON extraction from model output (handles ```json fences)."""
+    if not text:
+        return None
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    candidate = fenced.group(1).strip() if fenced else text.strip()
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    # Fall back to the first {...} or [...] block in the text.
+    match = re.search(r"(\[.*\]|\{.*\})", candidate, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return None
+    return None
