@@ -86,6 +86,29 @@ prompt is missing detail, fall back to these notes.
   `^20.19 || >=22.12`), and run:
   `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-browser --skip-setup --non-interactive`
 
+### A-RESOLVED (2026-06-26) — Hermes build/install fixed via runtime entrypoint
+
+The Section-A plan ("bake install into Dockerfile + `ENV HERMES_HOME=/data/.hermes`")
+turned out **not viable** once the installer source was read:
+
+- The old build line `... | bash < /dev/null` passed **no args + empty stdin**, so
+  the installer exited instantly (`DONE 0.2s`) — Hermes was never installed by the
+  image, only manually onto ephemeral disk. Every rebuild lost it.
+- In non-root mode the installer puts **code + managed Node + managed uv all under
+  `$HERMES_HOME`** (`$HERMES_HOME/hermes-agent`, `/node`, `/bin/uv`). `/data` is a
+  **runtime-only** bucket mount (absent during `docker build`), so baking the
+  install with `HERMES_HOME=/data` fails at build, and using a different build-time
+  `HERMES_HOME` then switching to `/data` orphans the managed Node/uv.
+
+**Fix shipped:** install Hermes at **container startup into `/data/.hermes`**,
+idempotently, via `entrypoint.sh` (runs in the background so the web app + HF health
+check come up immediately). Because `/data` persists, Hermes now survives rebuilds
+permanently. Changes: new `entrypoint.sh`; `Dockerfile` drops the no-op bake line,
+adds `xz-utils`, bumps Node 20→22, sets `ENV HERMES_HOME=/data/.hermes`, runs
+`CMD ["./entrypoint.sh"]`; `app.py` health check now **probes** `hermes` on PATH
+(`installed`/`installing`) instead of hardcoding it. Installer invoked as:
+`curl -fsSL .../install.sh | bash -s -- --skip-setup --skip-browser --non-interactive`.
+
 ### B. Clip-analysis step — NVIDIA Nemotron 3 Nano Omni (video) via fal
 
 - **Goal:** a pipeline step that *watches* a source video and returns candidate

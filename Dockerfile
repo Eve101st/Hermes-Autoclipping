@@ -1,34 +1,39 @@
 FROM python:3.9
 
 # --- System dependencies (installed as root) ---
-# Hermes Agent's installer can auto-install these, but it requires root for apt
-# and we run it as a non-root user, so pre-install everything it depends on:
-# git (required prerequisite), Node.js + npm, ripgrep, ffmpeg, curl.
+# Hermes is installed at RUNTIME by entrypoint.sh (see that file for why), so the
+# image only needs the tools the installer and the app rely on:
+#   curl git        - installer download + `git clone` of the Hermes repo
+#   xz-utils        - the installer unpacks Node.js from a .tar.xz archive
+#   ripgrep         - used by Hermes' code/search tools
+#   ffmpeg          - clip cutting / audio extraction (tools/clipper, transcript)
+#   Node.js 22      - Hermes requires Node >=22.12 (matches the installer's own
+#                     provisioning; pre-installing it makes first boot faster)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl git ripgrep ffmpeg ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+        curl git xz-utils ripgrep ffmpeg ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Non-root user with UID 1000 (Hugging Face Spaces requirement) ---
 RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
+    PATH=/home/user/.local/bin:$PATH \
+    # Hermes keeps code + managed Node/uv + config + sessions here. /data is the
+    # persistent Space bucket, so everything survives rebuilds.
+    HERMES_HOME=/data/.hermes
 
 # --- Python dependencies ---
 WORKDIR /app
 COPY --chown=user:user requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- Install Hermes Agent (as the non-root user) ---
-# Official installer: https://hermes-agent.nousresearch.com/docs/getting-started/installation
-# NOTE: there is no `@nousresearch/hermes-agent` npm package; the documented
-# install path is this script, which sets up the global `hermes` command.
-USER user
-RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash < /dev/null
-
 # --- Application code ---
 COPY --chown=user:user . .
+RUN chmod +x entrypoint.sh
+
+USER user
 
 EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# entrypoint.sh restores Hermes into /data (background) then execs uvicorn.
+CMD ["./entrypoint.sh"]
