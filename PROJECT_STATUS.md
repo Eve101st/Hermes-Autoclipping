@@ -63,6 +63,33 @@ above.
 
 ---
 
+## 🚀 Phase 3 (2026-06-26) — Hermes wiring built
+
+Built per the Phase 3 prompt. Code shipped; the LLM/Telegram/tool-registration
+config is **manual in the dev terminal** (see `CLAUDE.md` §10) and the end-to-end
+test is deferred (user plugs in all API keys after build).
+
+- `start.sh` (replaces `entrypoint.sh`) — restore Hermes into `/data` (bg) →
+  launch `hermes gateway` if `TELEGRAM_BOT_TOKEN` set (bg) → exec uvicorn (fg).
+  `Dockerfile` `CMD` now runs `start.sh`; base bumped `python:3.9 → 3.11` (fastmcp
+  needs ≥3.10); added `fastmcp` to `requirements.txt`.
+- `mcp_server.py` (FastMCP, stdio) — the **real tool-registration mechanism**.
+  Hermes spawns it via an `mcp_servers:` block in `config.yaml` (§6/§10). The
+  prompt's "register http://localhost:7860/tools" does **not** work — Hermes speaks
+  MCP, and the REST bridge isn't MCP.
+
+⚠️ Prompt assumptions corrected via the live docs:
+- **Telegram** — Hermes has a **built-in** gateway (`hermes gateway`, python-telegram-bot);
+  no custom webhook bridge needed. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS`.
+- **Models** — `hermes model` picker; main model + per-task `auxiliary:` overrides
+  (not a simple/medium/complex tier system). Haiku-for-parsing → an auxiliary override.
+- **Tool registration** — MCP (`mcp_servers` in `config.yaml`), `/reload-mcp` to apply.
+
+Still open: verify the FastMCP `@mcp.tool`/`mcp.run()` API against the installed
+version at runtime; confirm `hermes tools` lists all five after registration.
+
+---
+
 ## 📌 Build notes (2026-06-25) — pending, NOT yet implemented
 
 These are decisions/specs captured for the upcoming **build prompts**. No code for

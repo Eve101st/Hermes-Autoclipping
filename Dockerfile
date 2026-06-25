@@ -1,8 +1,8 @@
-FROM python:3.9
+FROM python:3.11
 
 # --- System dependencies (installed as root) ---
-# Hermes is installed at RUNTIME by entrypoint.sh (see that file for why), so the
-# image only needs the tools the installer and the app rely on:
+# Hermes is installed at RUNTIME by start.sh (see that file for why), so the image
+# only needs the tools the installer and the app rely on:
 #   curl git        - installer download + `git clone` of the Hermes repo
 #   xz-utils        - the installer unpacks Node.js from a .tar.xz archive
 #   ripgrep         - used by Hermes' code/search tools
@@ -30,10 +30,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # --- Application code ---
 COPY --chown=user:user . .
-RUN chmod +x entrypoint.sh
+RUN chmod +x start.sh
 
 USER user
 
 EXPOSE 7860
-# entrypoint.sh restores Hermes into /data (background) then execs uvicorn.
-CMD ["./entrypoint.sh"]
+# start.sh restores Hermes into /data + launches the Telegram gateway (if
+# configured) in the background, then execs uvicorn (foreground).
+CMD ["./start.sh"]

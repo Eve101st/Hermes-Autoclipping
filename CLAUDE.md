@@ -42,11 +42,12 @@ that exposes each pipeline tool for direct testing.
 |------|---------|
 | `app.py` | FastAPI app: `GET /` health check (probes `hermes` on PATH) + `POST /tools/{tool_name}` bridge. |
 | `config.py` | Loads env vars (`.env` locally / Space secrets in prod). Exposes `ANTHROPIC_API_KEY`, `FAL_KEY`, `BLOTATO_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. |
-| `entrypoint.sh` | Container entrypoint: installs/restores Hermes into `/data` (background) then execs uvicorn. |
-| `Dockerfile` | Image build — see §5. |
-| `requirements.txt` | `fastapi`, `uvicorn[standard]`, `youtube-transcript-api`, `yt-dlp`, `faster-whisper`, `httpx`, `python-dotenv`, `fal-client`, `requests`. |
+| `start.sh` | Container entrypoint: restores Hermes into `/data` (background), launches the Telegram gateway if configured, then execs uvicorn. |
+| `mcp_server.py` | MCP server wrapping the five tools so Hermes can call them (spawned by Hermes over stdio). See §6. |
+| `Dockerfile` | Image build — `python:3.11` base — see §5. |
+| `requirements.txt` | `fastapi`, `uvicorn[standard]`, `youtube-transcript-api`, `yt-dlp`, `faster-whisper`, `httpx`, `python-dotenv`, `fal-client`, `requests`, `fastmcp`. |
 | `tools/` | Pipeline tool modules — see §4. |
-| `tools_manifest.json` | Tool contract (input/output schemas) for the bridge / a future MCP wrapper. |
+| `tools_manifest.json` | Tool contract (input/output schemas) for the REST bridge; mirrors the MCP tools in `mcp_server.py`. |
 | `README.md` | **HF Space config frontmatter** (`sdk: docker`, `app_port: 7860`) + short blurb. Mandatory for the Space to build. |
 | `PROJECT_STATUS.md` | Plain-English status + build-notes log. |
 | `.env` | Secrets, gitignored — never committed. |
@@ -66,19 +67,24 @@ or (eventually) via an MCP wrapper.
 
 ## 5. Build & deploy
 
-Base `python:3.9`. System deps installed as root, then drop to non-root UID 1000
-(HF requirement). Node.js 22, `xz-utils`, `git`, `ripgrep`, `ffmpeg`, `curl`.
+Base `python:3.11` (≥3.10 required by `fastmcp`/the MCP SDK; Hermes also prefers
+3.11). System deps installed as root, then drop to non-root UID 1000 (HF
+requirement). Node.js 22, `xz-utils`, `git`, `ripgrep`, `ffmpeg`, `curl`.
+`CMD ["./start.sh"]`.
 
-**Hermes is installed at runtime, not at build time** (`entrypoint.sh`), because:
+**Hermes is installed at runtime, not at build time** (`start.sh`), because:
 
 - The installer puts code + its managed Node + its managed uv all under
   `$HERMES_HOME`, and we want those on the persistent bucket `/data`.
 - `/data` is a **runtime-only mount** — it does not exist during `docker build`.
 
-So `entrypoint.sh` installs Hermes into `/data/.hermes` on boot, idempotently
+So `start.sh` installs Hermes into `/data/.hermes` on boot, idempotently
 (`curl … | bash -s -- --skip-setup --skip-browser --non-interactive`), in the
 **background** so the web app binds port 7860 immediately. First boot clones; later
-boots relink/update. Because `/data` persists, Hermes survives every rebuild.
+boots relink/update. Because `/data` persists, Hermes survives every rebuild. If
+`TELEGRAM_BOT_TOKEN` is set, `start.sh` then launches the Telegram gateway
+(`hermes gateway`) in the background; uvicorn runs in the foreground so the Space
+stays "Running" even before Hermes is configured.
 
 `ENV HERMES_HOME=/data/.hermes` is set in the Dockerfile.
 
@@ -92,9 +98,21 @@ Hermes Agent registers tools via **MCP** (local stdio or remote HTTP MCP servers
 in its config), discovered at startup — **not** by polling a `tools_manifest.json`
 over plain HTTP. So:
 
-- `POST /tools/{name}` is for **direct `curl` testing** of each tool.
-- To let **Hermes** call these, wrap them as an **MCP server** and register it in
-  `/data/.hermes/config.yaml`. `tools_manifest.json` is the contract for that wrapper.
+- `POST /tools/{name}` (uvicorn) is for **direct `curl` testing** of each tool.
+- Hermes calls the tools through **`mcp_server.py`** (FastMCP, stdio), which Hermes
+  spawns once it's registered in `/data/.hermes/config.yaml`:
+
+  ```yaml
+  mcp_servers:
+    autoclipping:
+      command: /usr/local/bin/python
+      args: ["/app/mcp_server.py"]
+      enabled: true
+      tools:
+        include: [get_transcript, identify_moments, cut_clips, analyze_clips, publish_clips]
+  ```
+  Reload after editing with `/reload-mcp`. The subprocess inherits the container
+  env (Space secrets), which `config.py` reads.
 - Hermes state lives under `HERMES_HOME=/data/.hermes` (config `config.yaml`,
   secrets `.env`, managed Node/uv, code) — all on the persistent bucket.
 
@@ -134,11 +152,39 @@ Clone the Space (don't zip): `git clone https://huggingface.co/spaces/devproxa/A
 → `code Autoclipping`. Auth with `devproxa` + HF write token. Recreate `.env`
 (it's gitignored). Edit → commit → `git push origin main` redeploys.
 
-## 10. Open items
+## 10. Hermes manual setup (HF dev-mode terminal)
 
-- Set Space secrets `FAL_KEY` and `BLOTATO_API_KEY`; set `BLOTATO_TARGETS`.
+Done once in the dev terminal; persists on `/data`. After this, restart the Space
+and `start.sh` auto-launches the Telegram gateway.
+
+```bash
+# 1. LLM provider + models (interactive). Pick Anthropic, paste ANTHROPIC_API_KEY,
+#    choose a current model (e.g. claude-opus-4-8). Per-task overrides go under
+#    `auxiliary:` in config.yaml (e.g. a lighter claude-haiku-4-5 for parsing) —
+#    Hermes uses per-task auxiliary routing, not simple/medium/complex tiers.
+hermes model
+
+# 2. Telegram (interactive): paste TELEGRAM_BOT_TOKEN + your numeric user ID.
+#    Writes TELEGRAM_BOT_TOKEN / TELEGRAM_ALLOWED_USERS to /data/.hermes/.env.
+hermes gateway setup
+
+# 3. Register the tools: add the mcp_servers block from §6 to
+#    /data/.hermes/config.yaml, then reload (or restart the Space).
+hermes   # then in-session: /reload-mcp
+
+# 4. Run the bot (start.sh does this automatically on restart once token is set):
+hermes gateway
+```
+
+Confirm tools are visible to Hermes with `hermes tools`.
+
+## 11. Open items
+
+- Set Space secrets (`FAL_KEY`, `BLOTATO_API_KEY`, `ANTHROPIC_API_KEY`,
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`); set `BLOTATO_TARGETS`.
 - Verify the next rebuild's logs show Hermes installing into `/data` and `GET /`
   flipping `hermes` from `installing` → `installed`.
-- Build the **MCP wrapper** so Hermes can call the tools (§6).
-- Smoke-test each tool via `POST /tools/{name}` after the rebuild.
-- Confirm fal video input key; fill in `BLOTATO_TARGETS`.
+- Do the §11 manual Hermes setup (model, Telegram, MCP registration).
+- Confirm `mcp_server.py` runs under Hermes (verify the `@mcp.tool`/`mcp.run()`
+  FastMCP API against the installed `fastmcp` version) and `hermes tools` lists all five.
+- Smoke-test each tool via `POST /tools/{name}`; confirm fal video input key; fill `BLOTATO_TARGETS`.

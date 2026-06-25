@@ -7,3 +7,4 @@ httpx
 python-dotenv
 fal-client
 requests
+fastmcp
