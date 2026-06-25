@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+youtube-transcript-api
+faster-whisper
+httpx
+python-dotenv
+fal-client
+requests

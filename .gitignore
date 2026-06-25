@@ -1,0 +1,12 @@
+# Secrets — added as Hugging Face Space secrets, never committed
+.env
+
+# Claude Code local settings
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
