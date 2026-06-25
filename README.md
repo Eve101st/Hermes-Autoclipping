@@ -21,6 +21,22 @@ Phase 1 — infrastructure scaffold. The root endpoint returns a health check:
 { "status": "Autoclipping pipeline is live", "hermes": "installed" }
 ```
 
+## Continuing development on another machine (VS Code)
+
+The git remote **is** this Hugging Face Space — it's the source of truth. Don't zip
+the folder and don't push to GitHub; just clone the Space into a fresh VS Code
+project.
+
+1. In VS Code: `Ctrl+Shift+P` → **Git: Clone** → paste
+   `https://huggingface.co/spaces/devproxa/Autoclipping` → **Open**.
+   *(Or in a terminal: `git clone https://huggingface.co/spaces/devproxa/Autoclipping && code Autoclipping`.)*
+2. When prompted, sign in with username `devproxa` and your HF **write** access
+   token as the password.
+3. Recreate `.env` (it's gitignored, so not in the clone) — see keys below.
+4. Edit → `git commit` → `git push origin main` redeploys the Space automatically.
+
+Full step-by-step + prerequisites are in **`HANDOFF.md`**.
+
 ## Local development
 
 ```bash

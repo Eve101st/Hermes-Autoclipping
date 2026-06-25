@@ -64,25 +64,56 @@
 2. **`"hermes": "installed"` in `app.py` is hardcoded** — it does not probe the binary. Recommended Phase-2 fix: shell out to `hermes --version` (or check the binary on `PATH`) so the health check is truthful.
 3. **Space secrets not yet set** — `config.py` will read `None` for all keys until the 5 secrets are added in the Space (Settings → Variables and secrets).
 
-## 7. Continuing on a new machine
+## 7. Continuing on a new machine (clone into a fresh VS Code project)
 
-**Do NOT zip the folder — clone it.** Steps:
+> **Hosting note:** the git remote is the **Hugging Face Space** — this is the
+> single source of truth. **Do NOT push to GitHub.** The GitHub account associated
+> with the Space belongs to the **client**, not the maintainer. Do not add a
+> GitHub remote; use the HF `origin` only.
 
+**Do NOT zip the folder — clone it.**
+
+### Prerequisites on the new machine
+- [Git](https://git-scm.com/download/win) (includes Git Credential Manager)
+- [VS Code](https://code.visualstudio.com/)
+- Python 3.9+ (for running/editing locally)
+- *(Optional)* Docker Desktop — only if you want to build/run the container locally
+- VS Code extensions (recommended): **Python**, **Docker**
+
+### Option A — clone from inside VS Code (GUI)
+1. Open VS Code → `Ctrl+Shift+P` → **Git: Clone**.
+2. Paste: `https://huggingface.co/spaces/devproxa/Autoclipping`
+3. Pick a local folder; when prompted, **Open** the cloned repo.
+4. Authenticate when asked: **username** `devproxa`, **password** = your HF
+   **write** access token (https://huggingface.co/settings/tokens).
+
+### Option B — clone from the terminal, then open in VS Code
 ```bash
 git clone https://huggingface.co/spaces/devproxa/Autoclipping
 cd Autoclipping
+code .
 ```
+Same credentials as above when prompted.
 
-- When prompted: username `devproxa`, password = your HF **write** access token (create/reuse at https://huggingface.co/settings/tokens).
-- Recreate the local `.env` (it is gitignored, so it is NOT in the clone). Copy the placeholder keys from §3 / `config.py`:
-  ```
-  ANTHROPIC_API_KEY=
-  FAL_KEY=
-  BLOTATO_API_KEY=
-  TELEGRAM_BOT_TOKEN=
-  TELEGRAM_CHAT_ID=
-  ```
-- Optional local run (without Docker): `pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7860`.
+### After cloning (either option)
+1. **Recreate `.env`** — it is gitignored, so it is NOT in the clone. Create a new
+   `.env` in the project root with these keys (values come from §3 / `config.py`):
+   ```
+   ANTHROPIC_API_KEY=
+   FAL_KEY=
+   BLOTATO_API_KEY=
+   TELEGRAM_BOT_TOKEN=
+   TELEGRAM_CHAT_ID=
+   ```
+2. *(Optional)* Run locally without Docker:
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate        # Windows  (use: source .venv/bin/activate on macOS/Linux)
+   pip install -r requirements.txt
+   uvicorn app:app --host 0.0.0.0 --port 7860
+   ```
+3. Make changes → `git add` / `git commit` / `git push origin main`. Pushing to the
+   HF remote redeploys the Space automatically.
 
 ## 8. Next actions (Phase 2 entry)
 
