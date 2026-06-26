@@ -7,9 +7,9 @@ app = FastAPI(title="Autoclipping")
 
 @app.get("/")
 def root():
-    """Health check. Probes for the `hermes` binary rather than hardcoding it:
-    the entrypoint restores Hermes into /data in the background, so `hermes`
-    appears on PATH a short while after the web app starts serving."""
+    """Health check. Probes for the `hermes` binary rather than hardcoding it.
+    On the VPS Hermes is baked into the image (seeded into the /data volume), so it
+    is normally present immediately; the probe still degrades gracefully if not."""
     hermes = "installed" if shutil.which("hermes") else "installing"
     return {"status": "Autoclipping pipeline is live", "hermes": hermes}
 

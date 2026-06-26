@@ -130,6 +130,102 @@ with `python --version` after a factory reboot. Full runbook: **`STARTUP_GUIDE.m
 
 ---
 
+## 🌿 Branch split (2026-06-26) — VPS retarget, pending build prompt
+
+**Why two branches:** Hugging Face Spaces and Telegram cannot reach each other at
+the network level (the HF egress / Telegram is blocked), so the Hermes Telegram
+gateway can't run on HF. Decision:
+
+- **`main`** — stays the **Hugging Face Spaces** build (current `/data` FUSE setup).
+- **`vps`** — retargeted to deploy on a **Tencent VPS**, where the Telegram gateway
+  can actually reach the network. (`vps` has no upstream remote configured yet.)
+
+### Target VPS architecture (decided 2026-06-26, all defaults chosen)
+
+- **Orchestration:** Docker Compose (`docker-compose.yml`) — closest to the current
+  Dockerfile; easy restarts/logs.
+- **Persistence:** Docker **named volume** mounted at `/data`, keep
+  `HERMES_HOME=/data/.hermes`. Survives rebuilds, no host-path coupling.
+- **Networking:** **reverse proxy + TLS** (Caddy or nginx) terminating HTTPS on a
+  domain, proxying to uvicorn on `7860` (kept internal).
+- **Hermes install:** **bake into the Docker image at build time** — now viable
+  because a real VPS filesystem/volume preserves exec bits and symlinks.
+
+### ✅ VPS file prep DONE (2026-06-26)
+
+Files retargeted to the VPS architecture (not yet committed/pushed). What changed:
+- `start.sh` — stripped `repair_venv`/`repair_perms` + runtime installer; now just
+  gateway (bg) + uvicorn (fg).
+- `Dockerfile` — bakes Hermes at build into `/data/.hermes` (relies on docker
+  named-volume seeding for persistence); dropped FUSE chmod/repair reasoning.
+- `docker-compose.yml` (NEW) — `app` + `caddy`, `hermes-data:/data` volume,
+  `env_file: .env`, 7860 internal.
+- `Caddyfile` (NEW) — reverse proxy + auto-TLS, placeholder `example.com`/email.
+- `.env.example` (NEW) — `FAL_KEY`/`BLOTATO_API_KEY`/`BLOTATO_TARGETS`.
+- `config.py`, `app.py` — comments retargeted (env_file / baked Hermes).
+- `README.md`, `STARTUP_GUIDE.md`, `AGENTS.md` — rewritten for VPS deploy.
+- `.gitignore`/`.dockerignore` — updated.
+- **Deleted** `fix-hermes.sh` (HF Dev-Mode-only).
+
+Still needs the user: provision the VPS, create the GitHub repo + push, fill
+`.env` + `Caddyfile` domain, then the one-time §10 Hermes setup. Commit/push held
+until explicitly asked.
+
+### What the VPS retarget changed (original plan — vs the old HF `vps` branch)
+
+These are the HF-Spaces-isms that were removed/retargeted (now done, above).
+
+1. **`start.sh` — delete the FUSE workarounds.** Remove `repair_venv()` and
+   `repair_perms()` entirely (they only existed for HF's `/data` FUSE mount). Remove
+   the runtime `ensure_hermes()` installer if baking into the image (below). What
+   remains: export env → `start_gateway` (background) → `exec uvicorn` (foreground).
+2. **`Dockerfile` — bake Hermes at build time.** Install via
+   `curl … install.sh | bash -s -- --skip-setup --skip-browser --non-interactive`
+   during build (FS now preserves +x, so no post-install chmod needed). Keep
+   `xz-utils`, Node 22, ffmpeg, ripgrep. `useradd -u 1000` is optional on a VPS —
+   keep for non-root hygiene. Persistent **config/secrets** still live on the named
+   volume at `/data/.hermes` so they survive rebuilds even though the binary is baked.
+3. **`docker-compose.yml` — new file.** App service (build from Dockerfile), named
+   volume → `/data`, `env_file: .env` for `FAL_KEY`/`BLOTATO_API_KEY`,
+   `restart: unless-stopped`, expose `7860` to the proxy only. Add the reverse-proxy
+   service (Caddy is simplest for auto-TLS) or document an external nginx.
+4. **`config.py` / `README.md` — drop HF wording.** "Space secrets" → `.env` /
+   compose `env_file`. Remove README HF frontmatter (`sdk: docker`, `app_port`) and
+   the "clone the HF Space" instructions; replace with VPS deploy (git pull +
+   `docker compose up -d --build`).
+5. **Port 7860** can stay (internal, behind proxy) — no need to renumber.
+6. **`AGENTS.md`** — add a VPS deployment section / note that `vps` ≠ `main` hosting.
+
+Open question for build time: where does the Telegram token get set on the VPS?
+Still via `hermes gateway setup` writing to `/data/.hermes` (now that the gateway
+can reach Telegram), so the named volume must exist before that runs.
+
+### Branch state & deploy source (confirmed 2026-06-26)
+
+- There is **one** `vps` branch only. It sits on the **same commit as `main`**
+  (`8c340d3`, 0 divergence) with **no remote** — i.e. it's a clean copy of `main`
+  with no VPS-specific commits yet. Nothing to reconcile or delete.
+- **Deploy source = a new GitHub repo.** The only current remote (`origin`) is the
+  HF Space and must NOT be the VPS's source. Plan: create a GitHub repo, push both
+  `main` and `vps` there, and the Tencent VPS clones the `vps` branch from GitHub.
+  (Not done yet — pushing to a new public remote is an outward action; do it when
+  running the build prompt / on explicit go-ahead.)
+
+### Cleanup principle: strip the hosting layer, keep the pipeline
+
+Safe to remove HF-only code on `vps` because `main` retains it. **Remove:**
+`repair_venv`/`repair_perms` + runtime-install logic in `start.sh`; README HF
+frontmatter (`sdk: docker`, `app_port`) + "clone the HF Space" section; "Space
+secrets" wording in `config.py`/README; `useradd -u 1000` optional (keep only for
+non-root hygiene). **Keep (shared, NOT HF-specific):** all of `tools/`,
+`mcp_server.py`, `app.py` tool bridge + health check, `config.py` keys,
+`requirements.txt`, `tools_manifest.json`.
+
+⚠️ Once `vps` diverges, do **NOT** `merge main → vps` (it drags HF code back).
+Cherry-pick shared-file fixes (e.g. a `tools/` bug fix) between branches instead.
+
+---
+
 ## 📌 Build notes (2026-06-25) — pending, NOT yet implemented
 
 These are decisions/specs captured for the upcoming **build prompts**. No code for

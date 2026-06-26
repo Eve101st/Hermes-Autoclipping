@@ -1,4 +1,4 @@
-# Secrets — added as Hugging Face Space secrets, never committed
+# Secrets — provided via docker-compose env_file on the VPS, never committed
 .env
 
 # Claude Code local settings

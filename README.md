@@ -1,51 +1,55 @@
----
-title: Autoclipping
-emoji: 🎬
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
----
+# Autoclipping (VPS)
 
-# Autoclipping
+Docker-based automation pipeline orchestrated by
+[Hermes Agent](https://hermes-agent.nousresearch.com). This is the **VPS branch**
+(`vps`), deployed to a Tencent VPS via Docker Compose. The `main` branch is the
+Hugging Face Spaces build — see that branch for the HF setup.
 
-Docker-based automation pipeline running on Hugging Face Spaces, orchestrated by
-[Hermes Agent](https://hermes-agent.nousresearch.com).
+> Why two branches: Hugging Face Spaces and Telegram can't reach each other at the
+> network level, so the Hermes Telegram gateway can't run on HF. The VPS gives it
+> real network access.
 
-## Status
+The pipeline: fetch a video transcript → pick clip-worthy moments → cut vertical
+clips → analyze each clip → publish to socials. A FastAPI app (`app.py`) serves a
+health check and a `POST /tools/{name}` bridge for direct tool testing.
 
-Phase 1 — infrastructure scaffold. The root endpoint returns a health check:
+## Deploy (Tencent VPS)
 
-```json
-{ "status": "Autoclipping pipeline is live", "hermes": "installed" }
+Prerequisites on the VPS: Docker + Docker Compose, a domain with a DNS A record
+pointing at the VPS IP, and ports 80/443 open in the Tencent security group.
+
+```bash
+git clone <your-github-repo> autoclipping && cd autoclipping
+git checkout vps
+
+cp .env.example .env        # fill FAL_KEY, BLOTATO_API_KEY, BLOTATO_TARGETS
+# edit Caddyfile            # set your domain + email
+
+docker compose up -d --build
 ```
 
-## Continuing development on another machine (VS Code)
+One-time Hermes setup (persists in the `hermes-data` volume):
 
-The git remote **is** this Hugging Face Space — it's the source of truth. Don't zip
-the folder and don't push to GitHub; just clone the Space into a fresh VS Code
-project.
+```bash
+docker compose exec app hermes model           # pick Owl Alpha
+docker compose exec app hermes gateway setup    # Telegram bot token + your user id
+# register the MCP server in /data/.hermes/config.yaml (see AGENTS.md §6)
+docker compose restart app
+```
 
-1. In VS Code: `Ctrl+Shift+P` → **Git: Clone** → paste
-   `https://huggingface.co/spaces/devproxa/Autoclipping` → **Open**.
-   *(Or in a terminal: `git clone https://huggingface.co/spaces/devproxa/Autoclipping && code Autoclipping`.)*
-2. When prompted, sign in with username `devproxa` and your HF **write** access
-   token as the password.
-3. Recreate `.env` (it's gitignored, so not in the clone) — see keys below.
-4. Edit → `git commit` → `git push origin main` redeploys the Space automatically.
+Health check (through the proxy): `https://<your-domain>/` returns
+`{"status":"Autoclipping pipeline is live","hermes":"installed"}`.
 
-Full technical reference (architecture, build, tools, services) is in **`AGENTS.md`**
-(the single source of truth; agents should read it first).
+Update app/tool code later: `git pull && docker compose up -d --build`.
 
 ## Local development
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env         # fill in keys
 uvicorn app:app --host 0.0.0.0 --port 7860
 ```
 
-Copy the placeholder keys in `.env` and fill them in locally. In production these
-are provided as **Space secrets**: `FAL_KEY`, `BLOTATO_API_KEY`. (The text model is
-Owl Alpha via Hermes — no Anthropic key required. Telegram credentials live in
-Hermes' own setup, not in Space secrets.)
+Full technical reference (architecture, build, tools, services) is in **`AGENTS.md`**
+(the single source of truth; agents should read it first). Step-by-step deploy
+runbook: **`STARTUP_GUIDE.md`**.

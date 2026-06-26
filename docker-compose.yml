@@ -1,0 +1,56 @@
+# Autoclipping — VPS deployment (Tencent).
+#
+# Two services:
+#   app   - the FastAPI tool bridge + Hermes (Telegram gateway). Internal only.
+#   caddy - reverse proxy that terminates HTTPS and proxies to app:7860, with
+#           automatic Let's Encrypt certificates. Edit ./Caddyfile (domain+email)
+#           before the first `up`.
+#
+# Persistent Hermes state (config.yaml, .env, sessions, baked code) lives in the
+# `hermes-data` named volume mounted at /data. The volume is seeded from the image
+# on first run, then survives rebuilds — so `hermes gateway setup` / `hermes model`
+# only need to be done once.
+#
+# First deploy:
+#   1. cp .env.example .env   and fill FAL_KEY / BLOTATO_API_KEY / BLOTATO_TARGETS
+#   2. edit Caddyfile (your domain + email)
+#   3. docker compose up -d --build
+#   4. docker compose exec app hermes model          # pick Owl Alpha (once)
+#   5. docker compose exec app hermes gateway setup   # Telegram token + user id (once)
+#   6. register the MCP server in /data/.hermes/config.yaml (see AGENTS.md §6), then
+#      docker compose restart app
+#
+# Update app/tool code later:  git pull && docker compose up -d --build
+
+services:
+  app:
+    build: .
+    image: autoclipping:latest
+    restart: unless-stopped
+    env_file: .env          # FAL_KEY, BLOTATO_API_KEY, BLOTATO_TARGETS
+    volumes:
+      - hermes-data:/data   # persistent Hermes home (HERMES_HOME=/data/.hermes)
+    expose:
+      - "7860"              # internal only; published by caddy, not bound to the host
+    # For local testing without the proxy, comment out `caddy` below and instead
+    # publish the port to localhost:
+    #   ports:
+    #     - "127.0.0.1:7860:7860"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data     # caddy's own cert store (separate volume from the app)
+      - caddy-config:/config
+
+volumes:
+  hermes-data:
+  caddy-data:
+  caddy-config:

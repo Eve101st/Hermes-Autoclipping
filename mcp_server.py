@@ -13,8 +13,8 @@ this module wraps the five pipeline functions as MCP tools. Hermes spawns it as 
           include: [get_transcript, identify_moments, cut_clips,
                     analyze_clips, publish_clips]
 
-The subprocess inherits the container env (Space secrets: FAL_KEY, BLOTATO_API_KEY,
-…), which `config.py` reads. The FastAPI `POST /tools/{name}` bridge in `app.py`
+The subprocess inherits the container env (compose env_file: FAL_KEY,
+BLOTATO_API_KEY, …), which `config.py` reads. The FastAPI `POST /tools/{name}` bridge in `app.py`
 remains for manual `curl` testing; this server is the path Hermes actually uses.
 """
 

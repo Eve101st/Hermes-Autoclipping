@@ -1,29 +1,40 @@
 FROM python:3.11
 
 # --- System dependencies (installed as root) ---
-# Hermes is installed at RUNTIME by start.sh (see that file for why), so the image
-# only needs the tools the installer and the app rely on:
-#   curl git        - installer download + `git clone` of the Hermes repo
+#   curl git        - Hermes installer download + its `git clone`
 #   xz-utils        - the installer unpacks Node.js from a .tar.xz archive
 #   ripgrep         - used by Hermes' code/search tools
 #   ffmpeg          - clip cutting / audio extraction (tools/clipper, transcript)
-#   Node.js 22      - Hermes requires Node >=22.12 (matches the installer's own
-#                     provisioning; pre-installing it makes first boot faster)
+#   Node.js 22      - Hermes requires Node >=22.12
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl git xz-utils ripgrep ffmpeg ca-certificates \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Non-root user with UID 1000 (Hugging Face Spaces requirement) ---
+# --- Non-root user (hygiene; not required on a VPS, kept to avoid running as root) ---
 RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH \
-    # Hermes keeps code + managed Node/uv + config + sessions here. /data is the
-    # persistent Space bucket, so everything survives rebuilds.
+    PATH=/data/.hermes/hermes-agent/venv/bin:/home/user/.local/bin:$PATH \
     HERMES_HOME=/data/.hermes
 
+# --- Hermes baked into the image at build time ---
+# Unlike Hugging Face (where /data is a runtime-only FUSE mount, forcing a runtime
+# install + exec-bit repairs), a VPS has a real filesystem so we install Hermes
+# during the build. We install into /data/.hermes; at runtime a docker named volume
+# mounted at /data is auto-SEEDED from this baked content the first time it's empty,
+# then persists across rebuilds (see docker-compose.yml).
+#   NOTE: because a non-empty volume is NOT re-seeded, rebuilding the image with a
+#   newer Hermes will NOT replace the Hermes already in an existing volume — upgrade
+#   Hermes from inside the container, or recreate the volume. App code under /app is
+#   not on the volume, so app/tool changes ship normally via image rebuild.
+RUN mkdir -p /data/.hermes && chown -R user:user /data
+USER user
+RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh \
+        | bash -s -- --skip-setup --skip-browser --non-interactive
+
 # --- Python dependencies ---
+USER root
 WORKDIR /app
 COPY --chown=user:user requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -35,6 +46,6 @@ RUN chmod +x start.sh
 USER user
 
 EXPOSE 7860
-# start.sh restores Hermes into /data + launches the Telegram gateway (if
-# configured) in the background, then execs uvicorn (foreground).
+# start.sh launches the Telegram gateway (if configured) in the background, then
+# execs uvicorn (foreground). Hermes is already present (baked + volume-seeded).
 CMD ["./start.sh"]

@@ -1,6 +1,11 @@
 .env
+.env.example
 .git
 .gitignore
+.gitattributes
+# Host-only deploy files — not needed inside the image
+docker-compose.yml
+Caddyfile
 __pycache__/
 *.py[cod]
 .venv/
