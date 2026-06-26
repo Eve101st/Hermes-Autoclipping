@@ -77,10 +77,33 @@ or (eventually) via an MCP wrapper.
 | Tool | Function | Notes |
 |------|----------|-------|
 | Transcript | `transcript.get_transcript(video_url)` | YouTube → `youtube-transcript-api` (~1s pacing); Twitch → `yt-dlp` subtitles; fallback → `faster-whisper` (CPU) on yt-dlp-extracted audio. Returns `[HH:MM:SS] text` lines. |
-| Moment selection | `analyzer.identify_moments(transcript)` | Nemotron text endpoint → top five windows `{start,end,reason}`, each **≤2 min** (video-endpoint limit). |
+| Moment selection | `analyzer.identify_moments(transcript)` | Nemotron text endpoint → top **ten** windows `{start,end,reason}`, each **≤2 min**, on **sentence boundaries** (see §4a). |
 | Clip analysis | `analyzer.analyze_clips(clip_paths)` | Nemotron video endpoint (mp4, ≤1080p, **≤2 min**) → per clip `{best moment, caption, virality_score}`. |
-| Cutting | `clipper.cut_clips(video_path, timestamps)` | ffmpeg, center-crop to 1080×1920 (9:16), writes `/tmp/clips`. |
-| Publishing | `publisher.publish_clips(clip_paths, captions)` | Blotato presigned upload → `/v2/posts` per configured target. |
+| Cutting | `clipper.cut_clips(video_path, timestamps)` | ffmpeg, center-crop to 1080×1920 (9:16), **2-second lead buffer** (`LEAD_BUFFER_SECONDS`), writes `/tmp/clips`. |
+| Publishing | `publisher.publish_clips(clip_paths, captions)` | Blotato presigned upload → `/v2/posts` per configured target; per-target `content` merge (YouTube title/privacyStatus). |
+
+### 4a. Pipeline behaviour spec (agents MUST follow this)
+
+The end-to-end flow Hermes orchestrates over a VOD:
+
+1. **Transcript** — `get_transcript(vod_url)` → timestamped text.
+2. **Select 10 cuts** — `identify_moments(transcript)` → the text model (Owl Alpha,
+   then Nemotron text) returns **exactly ten** candidate windows, **each ≤2 minutes**
+   (target ~115s to leave room for the buffer + the Nemotron 2-min video cap).
+3. **Sentence-boundary reasoning (required)** — the model MUST place `start`/`end` on
+   **natural sentence boundaries / clear pauses, never mid-sentence**. It inspects the
+   transcript line at each boundary; if a sentence is in progress it moves the
+   boundary to the sentence start/end, and **confirms this in each window's `reason`**.
+4. **Download + cut the VOD** — download the source VOD video (yt-dlp), then
+   `cut_clips(video_path, windows)`. Each cut starts **2 seconds early**
+   (`LEAD_BUFFER_SECONDS`, clamped at 0) as a safety margin so a clip never opens in
+   the middle of a sentence; clips are 9:16 mp4 in `/tmp/clips`.
+5. **Analyze** — `analyze_clips(clips)` (Nemotron video) → best 30–90s, caption, score.
+6. **Publish** — `publish_clips(clips, captions)` to the Blotato targets (§7).
+
+> Why the buffer + reasoning are belt-and-suspenders: the model is *instructed* to pick
+> clean boundaries (step 3), and the cutter *also* pads 2s at the start (step 4), so
+> even an imperfect boundary won't clip someone mid-word.
 
 ## 5. Build & deploy
 
@@ -219,11 +242,17 @@ Confirm tools are visible to Hermes with `hermes tools`.
   Anthropic key — text model is Owl Alpha. Telegram creds go in `hermes gateway setup`.)
 - Verify the next rebuild's logs show Hermes installing into `/data` and `GET /`
   flipping `hermes` from `installing` → `installed`.
-- Do the §11 manual Hermes setup (model, Telegram, MCP registration).
+- Do the §10 manual Hermes setup (model, Telegram, MCP registration).
 - Confirm `mcp_server.py` runs under Hermes (verify the `@mcp.tool`/`mcp.run()`
   FastMCP API against the installed `fastmcp` version) and `hermes tools` lists all five.
 - Smoke-test each tool via `POST /tools/{name}`; fill `BLOTATO_TARGETS`.
-- fal schema confirmed (`video_url`, mp4/≤1080p/≤2min); windows capped at 2 min.
-  Open product question: the pipeline currently publishes the cut *window* clips —
-  if you want to publish only the 30-90s "best moment" from `analyze_clips`, Hermes
-  must re-cut (call `cut_clips` again with those timestamps) before `publish_clips`.
+- Confirm TikTok's exact `privacyLevel` enum value against Blotato's docs.
+- **Implemented:** 10 windows + 2-min cap + sentence-boundary reasoning (§4a);
+  clipper 2s lead buffer (`LEAD_BUFFER_SECONDS`); YouTube publishing via per-target
+  `content` merge.
+- Open product question: the pipeline publishes the cut *window* clips. To publish
+  only the 30-90s "best moment" from `analyze_clips`, Hermes must re-cut (call
+  `cut_clips` again with those timestamps) before `publish_clips`.
+- Pipeline gap: `cut_clips` needs the VOD **video** downloaded locally first
+  (yt-dlp); there is no dedicated download tool yet — Hermes/the orchestrator must
+  fetch the VOD before cutting (§4a step 4).

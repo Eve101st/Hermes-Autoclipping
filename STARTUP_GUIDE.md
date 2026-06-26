@@ -84,7 +84,7 @@ dashboard), the **`platform`** name, and a **`target`** object. **To add a platf
 |----------|-----------------|-------------|
 | Threads, Instagram, Twitter, Bluesky | just `{"targetType": "<name>"}` | Easiest. Threads allows optional `replyControl`. |
 | **TikTok** | `targetType` **plus** `privacyLevel`, `disabledComments`, `disabledDuet`, `disabledStitch`, `isBrandedContent`, `isYourBrand`, `isAiGenerated` | All required, or the post is rejected. |
-| **YouTube** | just `targetType` | …but YouTube also needs `title`, `privacyStatus`, `shouldNotifySubscribers` in the post **content** — **not yet supported by `publisher.py`** (needs a small code change). |
+| **YouTube** | just `targetType` | …plus `title`, `privacyStatus`, `shouldNotifySubscribers` in a **`"content"`** block on the entry (now supported). `title` defaults to the clip caption if omitted. |
 | Facebook | `pageId` + `mediaType` | |
 | Pinterest | `boardId` | |
 | LinkedIn | optional `pageId` | |
@@ -95,6 +95,8 @@ Copy-paste starter (swap the placeholder IDs for your real Blotato account IDs):
 [
   {"accountId": "REPLACE_INSTAGRAM_ID", "platform": "instagram", "target": {"targetType": "instagram"}},
   {"accountId": "REPLACE_THREADS_ID",   "platform": "threads",   "target": {"targetType": "threads"}},
+  {"accountId": "REPLACE_YOUTUBE_ID",   "platform": "youtube",   "target": {"targetType": "youtube"},
+    "content": {"privacyStatus": "public", "shouldNotifySubscribers": false}},
   {"accountId": "REPLACE_TIKTOK_ID",    "platform": "tiktok",    "target": {
       "targetType": "tiktok",
       "privacyLevel": "PUBLIC_TO_EVERYONE",
@@ -105,9 +107,10 @@ Copy-paste starter (swap the placeholder IDs for your real Blotato account IDs):
 ```
 
 Rules: the whole thing is **one JSON array** (`[ … ]`), entries comma-separated, **no
-trailing comma**. Start with the easy platforms; **YouTube** works only after the
-`publisher.py` per-target-content change (tracked in `AGENTS.md` open items), and
-TikTok's exact `privacyLevel` value should be confirmed against Blotato's docs.
+trailing comma**. For **YouTube**, the optional `"content"` block carries its required
+fields (`privacyStatus`, `shouldNotifySubscribers`); `title` is auto-filled from the
+clip caption unless you add your own. TikTok's exact `privacyLevel` value should be
+confirmed against Blotato's docs.
 
 ---
 
