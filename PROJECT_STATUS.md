@@ -55,9 +55,10 @@ above.
 
 ## Where to find the details
 
-- **`CLAUDE.md`** — the single source of truth: architecture, hosting/git, build &
-  deploy, the pipeline tools, external services, and open items. (Replaces the old
-  `HANDOFF.md`, which was deleted 2026-06-26.)
+- **`AGENTS.md`** — the single source of truth (formerly `CLAUDE.md`, renamed
+  2026-06-26 so any LLM reads it first): architecture, hosting/git, build & deploy,
+  the pipeline tools, external services, and open items. A small `CLAUDE.md` stub
+  points to it. (Replaces the old `HANDOFF.md`, deleted 2026-06-26.)
 - **`STARTUP_GUIDE.md`** — step-by-step deploy + configure runbook, written for both
   technical and non-technical readers.
 - **`README.md`** — HF Space config frontmatter + short blurb (kept because the
@@ -68,7 +69,7 @@ above.
 ## 🚀 Phase 3 (2026-06-26) — Hermes wiring built
 
 Built per the Phase 3 prompt. Code shipped; the LLM/Telegram/tool-registration
-config is **manual in the dev terminal** (see `CLAUDE.md` §10) and the end-to-end
+config is **manual in the dev terminal** (see `AGENTS.md` §10) and the end-to-end
 test is deferred (user plugs in all API keys after build).
 
 - `start.sh` (replaces `entrypoint.sh`) — restore Hermes into `/data` (bg) →

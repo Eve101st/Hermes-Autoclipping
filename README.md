@@ -35,7 +35,8 @@ project.
 3. Recreate `.env` (it's gitignored, so not in the clone) — see keys below.
 4. Edit → `git commit` → `git push origin main` redeploys the Space automatically.
 
-Full technical reference (architecture, build, tools, services) is in **`CLAUDE.md`**.
+Full technical reference (architecture, build, tools, services) is in **`AGENTS.md`**
+(the single source of truth; agents should read it first).
 
 ## Local development
 

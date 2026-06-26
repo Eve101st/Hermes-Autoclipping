@@ -6,7 +6,8 @@ plain-language *"In plain terms"* note, followed by the exact commands for whoev
 is at the keyboard. If you only want the big picture, read the *In plain terms*
 lines and skip the grey code boxes.
 
-> Deeper technical reference: **`CLAUDE.md`**. Running status & history:
+> Deeper technical reference: **`AGENTS.md`** (single source of truth — agents read
+> it first). Running status & history:
 > **`PROJECT_STATUS.md`**.
 
 ---
@@ -67,6 +68,47 @@ Go to **Settings → Variables and secrets** (owner account only):
 - ❌ An Anthropic key — the text model is **Owl Alpha**, configured inside Hermes.
 - ❌ Telegram keys here — those go into **Hermes' own setup** (Step 3), not Space secrets.
 
+### Filling in `BLOTATO_TARGETS` (where clips get posted)
+
+**In plain terms:** Blotato won't "post to everything" in one shot — every post must
+name a specific connected account. So you give it a **list**: one entry per account
+you want to publish to. The app posts each clip to every entry in the list.
+
+It's a JSON array. Each entry needs: your Blotato **`accountId`** (from your Blotato
+dashboard), the **`platform`** name, and a **`target`** object. **To add a platform
+(e.g. Threads), you add another entry — you don't edit an existing one.**
+
+⚠️ **Not every platform is just `{"targetType": "..."}`.** From Blotato's current spec:
+
+| Platform | `target` needs… | Other notes |
+|----------|-----------------|-------------|
+| Threads, Instagram, Twitter, Bluesky | just `{"targetType": "<name>"}` | Easiest. Threads allows optional `replyControl`. |
+| **TikTok** | `targetType` **plus** `privacyLevel`, `disabledComments`, `disabledDuet`, `disabledStitch`, `isBrandedContent`, `isYourBrand`, `isAiGenerated` | All required, or the post is rejected. |
+| **YouTube** | just `targetType` | …but YouTube also needs `title`, `privacyStatus`, `shouldNotifySubscribers` in the post **content** — **not yet supported by `publisher.py`** (needs a small code change). |
+| Facebook | `pageId` + `mediaType` | |
+| Pinterest | `boardId` | |
+| LinkedIn | optional `pageId` | |
+
+Copy-paste starter (swap the placeholder IDs for your real Blotato account IDs):
+
+```json
+[
+  {"accountId": "REPLACE_INSTAGRAM_ID", "platform": "instagram", "target": {"targetType": "instagram"}},
+  {"accountId": "REPLACE_THREADS_ID",   "platform": "threads",   "target": {"targetType": "threads"}},
+  {"accountId": "REPLACE_TIKTOK_ID",    "platform": "tiktok",    "target": {
+      "targetType": "tiktok",
+      "privacyLevel": "PUBLIC_TO_EVERYONE",
+      "disabledComments": false, "disabledDuet": false, "disabledStitch": false,
+      "isBrandedContent": false, "isYourBrand": false, "isAiGenerated": false
+  }}
+]
+```
+
+Rules: the whole thing is **one JSON array** (`[ … ]`), entries comma-separated, **no
+trailing comma**. Start with the easy platforms; **YouTube** works only after the
+`publisher.py` per-target-content change (tracked in `AGENTS.md` open items), and
+TikTok's exact `privacyLevel` value should be confirmed against Blotato's docs.
+
 ---
 
 ## Step 3 — Configure Hermes (one-time, in the terminal)
@@ -83,14 +125,23 @@ Turn on **Dev Mode** (Settings → Dev Mode) and open its terminal (or SSH/VS Co
 > its "runnable" flag. The one line below fixes both. (On a normal, non-Dev boot,
 > `start.sh` does this for you automatically.)
 
-**3a. Make the `hermes` command runnable** (paste as one line):
+**3a. Make the `hermes` command runnable.** Simplest — one command (and re-run this
+**any time `hermes` goes "not found" after a Dev Mode / VS Code reload**):
+
+```bash
+source /app/fix-hermes.sh
+```
+
+That relinks Hermes from the persistent `/data` install and repairs perms — **no
+reinstall** (reinstalling over the FUSE mount tends to fail). The equivalent manual
+one-liner, if you prefer:
 
 ```bash
 chmod -R u+x /data/.hermes/hermes-agent/venv/bin /data/.hermes/bin /data/.hermes/node/bin && ln -sf /data/.hermes/hermes-agent/venv/bin/hermes "$HOME/.local/bin/hermes" && export PATH="$HOME/.local/bin:$PATH" && hermes --version
 ```
 
-Expect a version number. If instead you get a Python/module error (a factory reboot
-can wipe a dependency), re-run the installer once — it's safe to repeat:
+Expect a version number. Only if `/data/.hermes/hermes-agent` is genuinely missing
+(not just "not found") do a one-time full install — safe to repeat:
 
 ```bash
 export HERMES_HOME=/data/.hermes; curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup --skip-browser --non-interactive && chmod -R u+x /data/.hermes/hermes-agent/venv/bin /data/.hermes/bin /data/.hermes/node/bin && hermes --version
@@ -168,8 +219,9 @@ where it posted, and the next scheduled slot).
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `hermes: cannot execute: Permission denied` | Cloud disk dropped the file's "runnable" flag | Re-run the **3a** one-liner (`chmod -R u+x …`). Auto-fixed by `start.sh` on a normal boot. |
-| `hermes: not found` in the dev terminal | Dev Mode didn't run `start.sh`; ephemeral symlink/PATH missing | Run the **3a** one-liner. |
+| `hermes: not found` **after a Dev Mode / VS Code reload** (recurring) | Reload reset ephemeral `/home/user`, wiping the symlink + PATH. The install on `/data` is fine. | **`source /app/fix-hermes.sh`** — relinks in one command. **Do NOT reinstall** (it often fails over the FUSE mount). |
+| `hermes: cannot execute: Permission denied` | Cloud disk dropped the file's "runnable" flag | `source /app/fix-hermes.sh` (or re-run the **3a** one-liner). Auto-fixed by `start.sh` on a normal boot. |
+| Reinstalling Hermes in the dev terminal **fails** | The full installer fights the existing `/data` install over the FUSE mount | You don't need it — `source /app/fix-hermes.sh` instead. Only do a full install if `/data/.hermes/hermes-agent` is truly gone. |
 | `python --version` still shows **3.9** | Old image still running | **Settings → Factory reboot** (keeps `/data`, so your config is safe). |
 | Health shows `"hermes":"installing"` | Background install not finished | Wait 1–2 min and re-check. |
 | `hermes tools` is empty after registering | MCP not reloaded, or `mcp_server.py` errored | `/reload-mcp`; check `python -c "import mcp_server"` runs cleanly. |

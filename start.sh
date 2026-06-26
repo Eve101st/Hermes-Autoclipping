@@ -3,7 +3,7 @@
 # Container entrypoint (Phase 3). Supersedes the earlier entrypoint.sh.
 #
 #   1. Restore Hermes into the persistent bucket /data/.hermes (idempotent,
-#      background) — see CLAUDE.md §5 for why this is done at runtime, not build.
+#      background) — see AGENTS.md §5 for why this is done at runtime, not build.
 #   2. Launch the Hermes Telegram gateway IF it's configured (background).
 #   3. Serve the tool endpoints + health check with uvicorn (foreground).
 #
@@ -34,7 +34,7 @@ repair_perms() {
     # The HF persistent store (/data) is a FUSE mount that does NOT preserve the
     # execute bit when the installer writes Hermes' venv scripts, so `hermes` fails
     # with "cannot execute: Permission denied" even though /data is exec-capable.
-    # Re-apply +x to Hermes' binaries on every boot (idempotent). See CLAUDE.md §5.
+    # Re-apply +x to Hermes' binaries on every boot (idempotent). See AGENTS.md §5.
     for d in "$HERMES_HOME/hermes-agent/venv/bin" "$HERMES_HOME/bin" "$HERMES_HOME/node/bin"; do
         [ -d "$d" ] && chmod -R u+x "$d" 2>/dev/null
     done
