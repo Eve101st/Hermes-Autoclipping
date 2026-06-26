@@ -50,6 +50,7 @@ that exposes each pipeline tool for direct testing.
 | `tools_manifest.json` | Tool contract (input/output schemas) for the REST bridge; mirrors the MCP tools in `mcp_server.py`. |
 | `README.md` | **HF Space config frontmatter** (`sdk: docker`, `app_port: 7860`) + short blurb. Mandatory for the Space to build. |
 | `PROJECT_STATUS.md` | Plain-English status + build-notes log. |
+| `STARTUP_GUIDE.md` | Deploy + configure runbook (mixed technical/non-technical audience). |
 | `.env` | Secrets, gitignored — never committed. |
 
 ## 4. Pipeline tools (`tools/`)

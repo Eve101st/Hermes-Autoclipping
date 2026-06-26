@@ -58,6 +58,8 @@ above.
 - **`CLAUDE.md`** — the single source of truth: architecture, hosting/git, build &
   deploy, the pipeline tools, external services, and open items. (Replaces the old
   `HANDOFF.md`, which was deleted 2026-06-26.)
+- **`STARTUP_GUIDE.md`** — step-by-step deploy + configure runbook, written for both
+  technical and non-technical readers.
 - **`README.md`** — HF Space config frontmatter + short blurb (kept because the
   frontmatter is required for the Space to build).
 
@@ -87,6 +89,43 @@ test is deferred (user plugs in all API keys after build).
 
 Still open: verify the FastMCP `@mcp.tool`/`mcp.run()` API against the installed
 version at runtime; confirm `hermes tools` lists all five after registration.
+
+### 🧱 Hurdle (2026-06-26): Hermes `cannot execute: Permission denied` on /data
+
+**Symptom:** `hermes` → `/data/.hermes/hermes-agent/venv/bin/hermes: cannot execute:
+Permission denied`.
+
+**First theory (WRONG):** `/data` mounted `noexec`. Ruled out — `findmnt /data`
+shows an `hf-mount` FUSE mount `rw,nosuid,nodev,…` with **no `noexec`**, and a
+`chmod +x` test script ran fine from `/data`.
+
+**Actual cause:** the HF persistent store is a FUSE mount that does **not preserve
+the execute bit** when the installer writes Hermes' venv scripts — they land `0644`,
+so the launcher can't `exec` them.
+
+**Fix (shipped, commit `98393fa`):** `start.sh` → `repair_perms()` runs
+`chmod -R u+x` on `…/venv/bin`, `bin`, `node/bin` after the install step, on every
+boot (idempotent).
+
+**Second wrinkle — Dev Mode skips `start.sh`:** in HF **Dev Mode** the container
+hands you a terminal instead of running the image `CMD`, so `start.sh` (install +
+perms-repair + gateway) does **not** run; the `hermes` symlink in ephemeral
+`/home/user/.local/bin` is also wiped by a factory reboot. In a dev terminal,
+restore it manually (single line):
+
+```bash
+chmod -R u+x /data/.hermes/hermes-agent/venv/bin /data/.hermes/bin /data/.hermes/node/bin && ln -sf /data/.hermes/hermes-agent/venv/bin/hermes "$HOME/.local/bin/hermes" && export PATH="$HOME/.local/bin:$PATH" && hermes --version
+```
+
+If the venv is stale, re-run the installer (idempotent):
+
+```bash
+export HERMES_HOME=/data/.hermes; curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup --skip-browser --non-interactive
+```
+
+Production (Dev Mode **off**) runs `start.sh` and does all of this automatically.
+Also note: the running image is now `python:3.11` (3.9 → 3.11 for fastmcp); confirm
+with `python --version` after a factory reboot. Full runbook: **`STARTUP_GUIDE.md`**.
 
 ---
 
