@@ -30,6 +30,21 @@ ensure_hermes() {
         || echo "[start] WARNING: Hermes install failed (see logs above)."
 }
 
+repair_perms() {
+    # The HF persistent store (/data) is a FUSE mount that does NOT preserve the
+    # execute bit when the installer writes Hermes' venv scripts, so `hermes` fails
+    # with "cannot execute: Permission denied" even though /data is exec-capable.
+    # Re-apply +x to Hermes' binaries on every boot (idempotent). See CLAUDE.md §5.
+    for d in "$HERMES_HOME/hermes-agent/venv/bin" "$HERMES_HOME/bin" "$HERMES_HOME/node/bin"; do
+        [ -d "$d" ] && chmod -R u+x "$d" 2>/dev/null
+    done
+    if command -v hermes >/dev/null 2>&1 && hermes --version >/dev/null 2>&1; then
+        echo "[start] hermes executable OK ($(hermes --version 2>/dev/null | head -1))"
+    else
+        echo "[start] WARNING: hermes still not runnable after perms repair."
+    fi
+}
+
 start_gateway() {
     if ! command -v hermes >/dev/null 2>&1; then
         echo "[start] Telegram gateway not started: hermes not installed."
@@ -48,7 +63,8 @@ start_gateway() {
         || echo "[start] Hermes gateway exited — is the model (Owl Alpha) configured? ('hermes model')"
 }
 
-# Restore Hermes then bring up the gateway, without blocking uvicorn's port bind.
-( ensure_hermes; start_gateway ) &
+# Restore Hermes, repair exec bits, then bring up the gateway — without blocking
+# uvicorn's port bind.
+( ensure_hermes; repair_perms; start_gateway ) &
 
 exec uvicorn app:app --host 0.0.0.0 --port 7860

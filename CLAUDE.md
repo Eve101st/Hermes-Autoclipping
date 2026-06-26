@@ -87,6 +87,12 @@ Telegram has been configured in Hermes (token present in `/data/.hermes`),
 uvicorn runs in the foreground so the Space stays "Running" even before Hermes is
 configured.
 
+> **`/data` is a FUSE mount (`hf-mount`)** — it is `rw` and exec-capable (NOT
+> `noexec`), but it does **not preserve the +x bit** when the installer writes
+> Hermes' venv scripts, so `hermes` fails with "cannot execute: Permission denied".
+> `start.sh`'s `repair_perms` re-applies `chmod -R u+x` to Hermes' `…/venv/bin`,
+> `bin`, and `node/bin` on every boot (idempotent) to fix this.
+
 `ENV HERMES_HOME=/data/.hermes` is set in the Dockerfile.
 
 > History: the original Dockerfile used `… | bash < /dev/null`, which passed no args
