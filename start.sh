@@ -30,6 +30,23 @@ ensure_hermes() {
         || echo "[start] WARNING: Hermes install failed (see logs above)."
 }
 
+repair_venv() {
+    # The venv's python interpreter symlinks have been observed missing at least
+    # once, breaking the hermes shebang (#!.../venv/bin/python3 -> sh reports
+    # "not found"). Root cause not yet confirmed: could be persistence-layer
+    # symlink loss on /data, or a one-time deletion by a prior repair step. The
+    # hermes-agent tree itself survives restarts intact, which argues against a
+    # per-boot drop. Recreate the links idempotently against the image's base
+    # Python on every boot; no-op when already healthy.
+    local vbin="$HERMES_HOME/hermes-agent/venv/bin"
+    local base="/usr/local/bin/python3.11"
+    [ -x "$base" ] || base="$(command -v python3.11 || command -v python3)"
+    [ -d "$vbin" ] && [ -n "$base" ] || return 0
+    ln -sfn "$base"    "$vbin/python3.11"
+    ln -sfn python3.11 "$vbin/python3"
+    ln -sfn python3    "$vbin/python"
+}
+
 repair_perms() {
     # The HF persistent store (/data) is a FUSE mount that does NOT preserve the
     # execute bit when the installer writes Hermes' venv scripts, so `hermes` fails
@@ -63,8 +80,8 @@ start_gateway() {
         || echo "[start] Hermes gateway exited — is the model (Owl Alpha) configured? ('hermes model')"
 }
 
-# Restore Hermes, repair exec bits, then bring up the gateway — without blocking
-# uvicorn's port bind.
-( ensure_hermes; repair_perms; start_gateway ) &
+# Restore Hermes, repair the venv interpreter links + exec bits, then bring up the
+# gateway — without blocking uvicorn's port bind.
+( ensure_hermes; repair_venv; repair_perms; start_gateway ) &
 
 exec uvicorn app:app --host 0.0.0.0 --port 7860
