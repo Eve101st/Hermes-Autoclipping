@@ -17,14 +17,23 @@
 set -uo pipefail
 
 export HERMES_HOME=/data/.hermes
+# Put the venv's bin straight on PATH so `hermes` resolves from persistent /data
+# without depending on the ephemeral /home/user/.local/bin symlink.
+export PATH="$HERMES_HOME/hermes-agent/venv/bin:$PATH"
 mkdir -p "$HERMES_HOME"
 
 ensure_hermes() {
-    if command -v hermes >/dev/null 2>&1; then
-        echo "[start] hermes already on PATH."
+    # Gate on the ACTUAL install on persistent /data, NOT on the `hermes` symlink
+    # in ephemeral /home (which is wiped every boot). The old check re-ran the
+    # installer on every boot, and the installer's git auto-update fails on the
+    # /data FUSE mount ("error: could not write index"), breaking the whole boot.
+    # If the install is present, skip the installer entirely — repair_venv +
+    # repair_perms do the cheap, reliable fixups. Only install on a truly fresh /data.
+    if [ -e "$HERMES_HOME/hermes-agent/venv/bin/hermes" ]; then
+        echo "[start] Hermes present on /data — skipping installer."
         return 0
     fi
-    echo "[start] installing/restoring Hermes into $HERMES_HOME ..."
+    echo "[start] no Hermes on /data — first-time install ..."
     curl -fsSL https://hermes-agent.nousresearch.com/install.sh \
         | bash -s -- --skip-setup --skip-browser --non-interactive \
         || echo "[start] WARNING: Hermes install failed (see logs above)."
