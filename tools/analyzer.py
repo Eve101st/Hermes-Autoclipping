@@ -9,13 +9,13 @@ Public API:
 `analyze_clips` reasons over each rendered clip *video* (video endpoint); each
 local clip is uploaded to fal first to obtain a `video_url`.
 
-fal endpoint IDs (verified against https://fal.ai/nemotron):
-    text  : nvidia/nemotron-3-nano-omni
-    video : nvidia/nemotron-3-nano-omni/video
+fal endpoint IDs + schema (verified against the fal Nemotron API docs):
+    text  : nvidia/nemotron-3-nano-omni   in {prompt}                  -> out {output, finish_reason, usage}
+    video : nvidia/nemotron-3-nano-omni/video   in {prompt, video_url} -> out {output, finish_reason, usage}
 
-⚠️ The video endpoint's input field name (`video_url`) follows fal's standard
-convention but was not runtime-verified. If a call returns HTTP 422, adjust
-`_VIDEO_INPUT_KEY` below to match the live schema.
+⚠️ The video endpoint accepts **mp4, up to 1080p, max 2 minutes**. So the candidate
+windows from `identify_moments` are capped at ~2 minutes (NOT the original 5) — a
+longer clip would be rejected. Cut clips must also be mp4 (clipper already emits mp4).
 """
 
 from __future__ import annotations
@@ -42,7 +42,11 @@ def _ensure_fal_key() -> None:
 
 
 def identify_moments(transcript: str) -> list[dict]:
-    """Return the five most clip-worthy 5-minute windows from a transcript."""
+    """Return the five most clip-worthy windows (each <=2 min) from a transcript.
+
+    Windows are capped at 2 minutes because the downstream Nemotron *video*
+    endpoint (analyze_clips) rejects clips longer than that.
+    """
     if not transcript or not transcript.strip():
         raise ValueError("transcript is empty")
     _ensure_fal_key()
@@ -51,11 +55,12 @@ def identify_moments(transcript: str) -> list[dict]:
     prompt = (
         "You are a short-form video producer. Below is a timestamped transcript "
         "([HH:MM:SS] per line) of a long stream/video. Identify the FIVE most "
-        "clip-worthy 5-minute windows (high energy, emotional, funny, surprising, "
-        "or insightful moments).\n\n"
+        "clip-worthy windows (high energy, emotional, funny, surprising, or "
+        "insightful moments).\n\n"
         "Respond with ONLY a JSON array of exactly 5 objects, no prose, each:\n"
         '{"start": "HH:MM:SS", "end": "HH:MM:SS", "reason": "<one sentence>"}\n'
-        "Each window should span ~5 minutes (end = start + 5 min).\n\n"
+        "Each window MUST be no longer than 2 minutes (a hard limit of the clip-"
+        "analysis model); aim for ~90-120 seconds (end = start + up to 2 min).\n\n"
         "TRANSCRIPT:\n"
         f"{transcript}"
     )
@@ -70,7 +75,10 @@ def identify_moments(transcript: str) -> list[dict]:
 
 
 def analyze_clips(clip_paths: list[str]) -> list[dict]:
-    """For each rendered clip, pick the best 30-90s moment + caption + score."""
+    """For each rendered clip, pick the best 30-90s moment + caption + score.
+
+    Each clip must be mp4, <=1080p, <=2 minutes (Nemotron video-endpoint limits).
+    """
     if not clip_paths:
         return []
     _ensure_fal_key()

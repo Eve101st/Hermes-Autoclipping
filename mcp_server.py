@@ -43,8 +43,8 @@ def get_transcript(video_url: str) -> str:
 
 @mcp.tool
 def identify_moments(transcript: str) -> list[dict]:
-    """From a timestamped transcript, return the five most clip-worthy 5-minute
-    windows as a list of {start, end, reason}."""
+    """From a timestamped transcript, return the five most clip-worthy windows
+    (each <=2 min, the video model's limit) as a list of {start, end, reason}."""
     return _identify_moments(transcript)
 
 

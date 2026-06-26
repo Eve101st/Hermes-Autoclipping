@@ -25,7 +25,7 @@
     },
     {
       "name": "identify_moments",
-      "description": "From a transcript, return the top five clip-worthy 5-minute windows.",
+      "description": "From a transcript, return the top five clip-worthy windows (each <=2 minutes, the Nemotron video-endpoint limit).",
       "input_schema": {
         "type": "object",
         "properties": {
