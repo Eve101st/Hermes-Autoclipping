@@ -21,6 +21,10 @@ from ._timecode import to_seconds
 
 OUTPUT_DIR = "/tmp/clips"
 
+# Start each cut this many seconds BEFORE the targeted start, so we don't begin a
+# clip in the middle of someone's sentence. Clamped at 0 for the start of the VOD.
+LEAD_BUFFER_SECONDS = 2.0
+
 # scale up so the shorter side covers the 9:16 frame, then center-crop to exact
 # 1080x1920. Keeps the action centered without letterboxing.
 _VERTICAL_FILTER = (
@@ -41,15 +45,19 @@ def cut_clips(video_path: str, timestamps: list[dict]) -> list[str]:
     for index, window in enumerate(timestamps):
         start = to_seconds(window.get("start", 0))
         end = to_seconds(window.get("end", 0))
-        duration = end - start
-        if duration <= 0:
+        if end - start <= 0:
             continue
+
+        # Pull the start back by the lead buffer (clamped at 0) so the clip doesn't
+        # open mid-sentence; the end is left where the model placed it.
+        buffered_start = max(0.0, start - LEAD_BUFFER_SECONDS)
+        duration = end - buffered_start
 
         out_path = os.path.join(OUTPUT_DIR, f"clip_{index:03d}.mp4")
         cmd = [
             "ffmpeg",
             "-y",
-            "-ss", f"{start:.3f}",   # fast input seek
+            "-ss", f"{buffered_start:.3f}",   # fast input seek (incl. lead buffer)
             "-i", video_path,
             "-t", f"{duration:.3f}",
             "-vf", _VERTICAL_FILTER,

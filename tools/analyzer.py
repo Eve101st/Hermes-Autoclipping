@@ -42,10 +42,12 @@ def _ensure_fal_key() -> None:
 
 
 def identify_moments(transcript: str) -> list[dict]:
-    """Return the five most clip-worthy windows (each <=2 min) from a transcript.
+    """Return the ten most clip-worthy windows (each <=2 min) from a VOD transcript.
 
-    Windows are capped at 2 minutes because the downstream Nemotron *video*
-    endpoint (analyze_clips) rejects clips longer than that.
+    Each window is capped at ~115 s: clipper adds a 2-second lead buffer at cut
+    time and the downstream Nemotron *video* endpoint hard-caps at 2 minutes.
+    The model is told to put start/end on sentence boundaries (never mid-sentence)
+    and to confirm that in each window's `reason`.
     """
     if not transcript or not transcript.strip():
         raise ValueError("transcript is empty")
@@ -54,13 +56,22 @@ def identify_moments(transcript: str) -> list[dict]:
 
     prompt = (
         "You are a short-form video producer. Below is a timestamped transcript "
-        "([HH:MM:SS] per line) of a long stream/video. Identify the FIVE most "
-        "clip-worthy windows (high energy, emotional, funny, surprising, or "
-        "insightful moments).\n\n"
-        "Respond with ONLY a JSON array of exactly 5 objects, no prose, each:\n"
-        '{"start": "HH:MM:SS", "end": "HH:MM:SS", "reason": "<one sentence>"}\n'
-        "Each window MUST be no longer than 2 minutes (a hard limit of the clip-"
-        "analysis model); aim for ~90-120 seconds (end = start + up to 2 min).\n\n"
+        "([HH:MM:SS] per line) of a long VOD. Identify the TEN most clip-worthy "
+        "windows (high energy, emotional, funny, surprising, or insightful).\n\n"
+        "BOUNDARY RULES (critical):\n"
+        "- Each window MUST be no longer than ~115 seconds. A 2-second lead buffer "
+        "is added at cut time and the analysis model hard-caps at 2 minutes, so "
+        "keep each window under ~115s.\n"
+        "- `start` and `end` MUST fall on NATURAL sentence boundaries / clear "
+        "pauses — NEVER mid-sentence. Inspect the transcript line at your chosen "
+        "`start`: if a sentence is already in progress there, move `start` earlier "
+        "to the beginning of that sentence. Do the same so `end` lands at a "
+        "sentence's end.\n"
+        "- In each object's `reason`, explicitly confirm the cut does not begin or "
+        "end mid-sentence (e.g. 'starts at a sentence boundary after a pause').\n\n"
+        "Respond with ONLY a JSON array of exactly 10 objects, no prose, each:\n"
+        '{"start": "HH:MM:SS", "end": "HH:MM:SS", '
+        '"reason": "<why it is clip-worthy + boundary confirmation>"}\n\n'
         "TRANSCRIPT:\n"
         f"{transcript}"
     )
@@ -71,7 +82,7 @@ def identify_moments(transcript: str) -> list[dict]:
     moments = _extract_json(result.get("output", ""))
     if not isinstance(moments, list):
         raise ValueError(f"unexpected model output: {result.get('output')!r}")
-    return moments[:5]
+    return moments[:10]
 
 
 def analyze_clips(clip_paths: list[str]) -> list[dict]:

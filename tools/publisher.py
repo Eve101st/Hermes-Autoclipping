@@ -32,9 +32,12 @@ _BASE = "https://backend.blotato.com"
 _UPLOAD_URL = f"{_BASE}/v2/media/uploads"
 _POSTS_URL = f"{_BASE}/v2/posts"
 
-# One entry per connected social account. Example:
-#   {"accountId": "acc_123", "platform": "tiktok",  "target": {"targetType": "tiktok"}}
-#   {"accountId": "acc_456", "platform": "youtube", "target": {"targetType": "youtube"}}
+# One entry per connected social account. Each: {accountId, platform, target} plus
+# an optional "content" dict whose keys are merged into the post content (used for
+# platform-specific required fields, e.g. YouTube's title/privacyStatus). Examples:
+#   {"accountId": "acc_123", "platform": "tiktok",  "target": {"targetType": "tiktok", ...flags}}
+#   {"accountId": "acc_456", "platform": "youtube", "target": {"targetType": "youtube"},
+#     "content": {"title": "My clip", "privacyStatus": "public", "shouldNotifySubscribers": false}}
 # Loaded from the BLOTATO_TARGETS env var (JSON array) if present, else this default.
 BLOTATO_TARGETS: list[dict] = json.loads(os.getenv("BLOTATO_TARGETS", "[]"))
 
@@ -69,14 +72,24 @@ def publish_clips(clip_paths: list[str], captions: list[str]) -> list[dict]:
         media_url = _upload_media(clip_path)
 
         for target in BLOTATO_TARGETS:
+            platform = target["platform"]
+            content = {
+                "text": caption,
+                "mediaUrls": [media_url],
+                "platform": platform,
+            }
+            # Merge any per-target content fields. Some platforms require extra
+            # content keys — notably YouTube needs `title`, `privacyStatus`, and
+            # `shouldNotifySubscribers`. Put those under the target's "content".
+            content.update(target.get("content", {}))
+            if platform == "youtube" and "title" not in content:
+                # YouTube requires a title (<=100 chars); default to the caption.
+                content["title"] = (caption or "Clip")[:100]
+
             payload = {
                 "post": {
                     "accountId": target["accountId"],
-                    "content": {
-                        "text": caption,
-                        "mediaUrls": [media_url],
-                        "platform": target["platform"],
-                    },
+                    "content": content,
                     "target": target["target"],
                 },
                 "useNextFreeSlot": True,
