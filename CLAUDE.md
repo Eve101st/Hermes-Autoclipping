@@ -41,7 +41,7 @@ that exposes each pipeline tool for direct testing.
 | File | Purpose |
 |------|---------|
 | `app.py` | FastAPI app: `GET /` health check (probes `hermes` on PATH) + `POST /tools/{tool_name}` bridge. |
-| `config.py` | Loads env vars (`.env` locally / Space secrets in prod). Exposes `ANTHROPIC_API_KEY`, `FAL_KEY`, `BLOTATO_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. |
+| `config.py` | Loads env vars (`.env` locally / Space secrets in prod). Exposes `FAL_KEY`, `BLOTATO_API_KEY`. (Telegram creds are Hermes-owned, not here.) |
 | `start.sh` | Container entrypoint: restores Hermes into `/data` (background), launches the Telegram gateway if configured, then execs uvicorn. |
 | `mcp_server.py` | MCP server wrapping the five tools so Hermes can call them (spawned by Hermes over stdio). See §6. |
 | `Dockerfile` | Image build — `python:3.11` base — see §5. |
@@ -82,9 +82,10 @@ So `start.sh` installs Hermes into `/data/.hermes` on boot, idempotently
 (`curl … | bash -s -- --skip-setup --skip-browser --non-interactive`), in the
 **background** so the web app binds port 7860 immediately. First boot clones; later
 boots relink/update. Because `/data` persists, Hermes survives every rebuild. If
-`TELEGRAM_BOT_TOKEN` is set, `start.sh` then launches the Telegram gateway
-(`hermes gateway`) in the background; uvicorn runs in the foreground so the Space
-stays "Running" even before Hermes is configured.
+Telegram has been configured in Hermes (token present in `/data/.hermes`),
+`start.sh` then launches the Telegram gateway (`hermes gateway`) in the background;
+uvicorn runs in the foreground so the Space stays "Running" even before Hermes is
+configured.
 
 `ENV HERMES_HOME=/data/.hermes` is set in the Dockerfile.
 
@@ -127,10 +128,13 @@ over plain HTTP. So:
   `publicUrl`, then PUT bytes); publish `POST …/v2/posts`. ⚠️ `/v2/posts` is
   **per-account** (`accountId`+`platform`+`target`) — no single "all platforms"
   call. Set `BLOTATO_TARGETS` (env, JSON array) to your connected accounts.
-- **Space secrets** (Settings → Variables and secrets): `ANTHROPIC_API_KEY`,
-  `FAL_KEY`, `BLOTATO_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Keep
-  `FAL_KEY` here as a Space secret; it must **not** be stored inside Hermes' own
-  `/data/.hermes` config (see MAINTENANCE.md).
+- **LLM (text model):** Owl Alpha via Hermes — **no Anthropic key required**. The
+  model is configured inside Hermes (`hermes model`), not via a Space secret.
+- **Telegram:** bot token + allowed users are configured inside Hermes
+  (`hermes gateway setup` → `/data/.hermes/.env`), **not** as Space secrets.
+- **Space secrets** (Settings → Variables and secrets): `FAL_KEY`,
+  `BLOTATO_API_KEY`. Keep `FAL_KEY` here as a Space secret; it must **not** be
+  stored inside Hermes' own `/data/.hermes` config.
 
 ## 8. Local development
 
@@ -158,10 +162,10 @@ Done once in the dev terminal; persists on `/data`. After this, restart the Spac
 and `start.sh` auto-launches the Telegram gateway.
 
 ```bash
-# 1. LLM provider + models (interactive). Pick Anthropic, paste ANTHROPIC_API_KEY,
-#    choose a current model (e.g. claude-opus-4-8). Per-task overrides go under
-#    `auxiliary:` in config.yaml (e.g. a lighter claude-haiku-4-5 for parsing) —
-#    Hermes uses per-task auxiliary routing, not simple/medium/complex tiers.
+# 1. LLM provider + models (interactive). Text model is Owl Alpha via Hermes — no
+#    Anthropic key needed. Confirm/select Owl Alpha here. Per-task overrides (if any)
+#    go under `auxiliary:` in config.yaml; Hermes uses per-task auxiliary routing,
+#    not simple/medium/complex tiers.
 hermes model
 
 # 2. Telegram (interactive): paste TELEGRAM_BOT_TOKEN + your numeric user ID.
@@ -180,8 +184,8 @@ Confirm tools are visible to Hermes with `hermes tools`.
 
 ## 11. Open items
 
-- Set Space secrets (`FAL_KEY`, `BLOTATO_API_KEY`, `ANTHROPIC_API_KEY`,
-  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`); set `BLOTATO_TARGETS`.
+- Set Space secrets (`FAL_KEY`, `BLOTATO_API_KEY`); set `BLOTATO_TARGETS`. (No
+  Anthropic key — text model is Owl Alpha. Telegram creds go in `hermes gateway setup`.)
 - Verify the next rebuild's logs show Hermes installing into `/data` and `GET /`
   flipping `hermes` from `installing` → `installed`.
 - Do the §11 manual Hermes setup (model, Telegram, MCP registration).

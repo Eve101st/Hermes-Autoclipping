@@ -45,5 +45,6 @@ uvicorn app:app --host 0.0.0.0 --port 7860
 ```
 
 Copy the placeholder keys in `.env` and fill them in locally. In production these
-are provided as **Space secrets**: `ANTHROPIC_API_KEY`, `FAL_KEY`,
-`BLOTATO_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+are provided as **Space secrets**: `FAL_KEY`, `BLOTATO_API_KEY`. (The text model is
+Owl Alpha via Hermes — no Anthropic key required. Telegram credentials live in
+Hermes' own setup, not in Space secrets.)

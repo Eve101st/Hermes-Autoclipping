@@ -13,8 +13,7 @@ from dotenv import load_dotenv
 # no-op; locally it reads the .env file next to this module.
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+# Telegram credentials are NOT here — Hermes' built-in gateway owns them and reads
+# them from its own /data/.hermes/.env (set via `hermes gateway setup`).
 FAL_KEY = os.getenv("FAL_KEY")
 BLOTATO_API_KEY = os.getenv("BLOTATO_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")

@@ -35,14 +35,17 @@ start_gateway() {
         echo "[start] Telegram gateway not started: hermes not installed."
         return 0
     fi
-    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
-        echo "[start] Telegram gateway not started: TELEGRAM_BOT_TOKEN unset."
-        echo "[start]   -> configure it with 'hermes gateway setup' in the dev terminal, then restart."
+    # The Telegram token lives in Hermes' own config (set by `hermes gateway setup`),
+    # not as a Space secret / container env var. Only launch the gateway once it's
+    # been configured there.
+    if ! grep -qs 'TELEGRAM_BOT_TOKEN' "$HERMES_HOME/.env" "$HERMES_HOME/config.yaml"; then
+        echo "[start] Telegram gateway not started: not configured in $HERMES_HOME."
+        echo "[start]   -> run 'hermes gateway setup' in the dev terminal, then restart the Space."
         return 0
     fi
     echo "[start] launching Hermes Telegram gateway (hermes gateway) ..."
     hermes gateway \
-        || echo "[start] Hermes gateway exited — is the model provider configured? ('hermes model')"
+        || echo "[start] Hermes gateway exited — is the model (Owl Alpha) configured? ('hermes model')"
 }
 
 # Restore Hermes then bring up the gateway, without blocking uvicorn's port bind.

@@ -41,8 +41,8 @@ structure is standing and the lights turn on.
    error. If you see an error mentioning **Hermes** or **install.sh**, copy it and
    send it over — that's the expected weak spot.
 2. **Add your secret keys** in the Space under **Settings → Variables and secrets**:
-   `ANTHROPIC_API_KEY`, `FAL_KEY`, `BLOTATO_API_KEY`, `TELEGRAM_BOT_TOKEN`,
-   `TELEGRAM_CHAT_ID`.
+   `FAL_KEY`, `BLOTATO_API_KEY`. (No Anthropic key — the text model is Owl Alpha via
+   Hermes. Telegram bot token + chat ID are set in `hermes gateway setup`, not here.)
 3. **When ready, start Phase 2** — the real automation logic.
 
 ## Moving to your other computer 💻
@@ -70,7 +70,7 @@ config is **manual in the dev terminal** (see `CLAUDE.md` §10) and the end-to-e
 test is deferred (user plugs in all API keys after build).
 
 - `start.sh` (replaces `entrypoint.sh`) — restore Hermes into `/data` (bg) →
-  launch `hermes gateway` if `TELEGRAM_BOT_TOKEN` set (bg) → exec uvicorn (fg).
+  launch `hermes gateway` if Telegram is configured in Hermes `/data` (bg) → exec uvicorn (fg).
   `Dockerfile` `CMD` now runs `start.sh`; base bumped `python:3.9 → 3.11` (fastmcp
   needs ≥3.10); added `fastmcp` to `requirements.txt`.
 - `mcp_server.py` (FastMCP, stdio) — the **real tool-registration mechanism**.
