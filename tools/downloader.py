@@ -35,8 +35,13 @@ def download_video(video_url: str, out_dir: str | None = None) -> str:
     outtmpl = os.path.join(out_dir, "%(id)s.%(ext)s")
 
     opts = {
+        # Cap at 1080p: Nemotron analysis is <=1080p and clips are cropped from
+        # this, so 4K just wastes (metered residential proxy) bandwidth + time.
         # Prefer a single mp4; fall back to bestvideo+bestaudio merged to mp4.
-        "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+        "format": (
+            "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/"
+            "b[height<=1080][ext=mp4]/b[height<=1080]/b"
+        ),
         "merge_output_format": "mp4",
         "outtmpl": outtmpl,
         "quiet": True,
