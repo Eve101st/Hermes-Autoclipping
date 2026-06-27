@@ -47,7 +47,7 @@ def download_video(video_url: str, out_dir: str | None = None) -> str:
         "quiet": True,
         "no_warnings": True,
     }
-    proxy = os.getenv("YT_PROXY")
+    proxy = os.getenv("YT_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("ALL_PROXY")
     if proxy:
         opts["proxy"] = proxy
 

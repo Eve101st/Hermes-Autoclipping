@@ -26,6 +26,33 @@ export HERMES_HOME=/data/.hermes
 # /data volume.
 export PATH="$HERMES_HOME/hermes-agent/venv/bin:$PATH"
 
+# --- Tor SOCKS5 proxy (for yt-dlp / transcript downloads) ---
+# YouTube throttles known datacenter IPs (and our old residential proxy was
+# throttled to ~10KB/s). Route outbound traffic for the pipeline tools through
+# Tor exit nodes so YouTube sees a non-datacenter IP. Loopback-only — not
+# exposed on the container network.
+start_tor() {
+    if ! command -v tor >/dev/null 2>&1; then
+        echo "[start] Tor not installed — skipping SOCKS5 proxy."
+        return 0
+    fi
+    echo "[start] launching Tor SOCKS5 proxy on 127.0.0.1:9050 ..."
+    tor --runasdaemon 0
+}
+stop_tor() {
+    if command -v tor >/dev/null 2>&1; then
+        pkill -x tor 2>/dev/null || true
+    fi
+}
+
+start_tor
+# Make yt-dlp / curl / the transcript tool use Tor by default. Tools that honor
+# the standard HTTP(S)_PROXY / ALL_PROXY env vars pick this up automatically;
+# yt-dlp also reads HTTPS_PROXY specifically.
+export ALL_PROXY=socks5://127.0.0.1:9050
+export HTTPS_PROXY=socks5://127.0.0.1:9050
+export HTTP_PROXY=socks5://127.0.0.1:9050
+
 start_gateway() {
     if ! command -v hermes >/dev/null 2>&1; then
         echo "[start] Telegram gateway not started: hermes not on PATH."

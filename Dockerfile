@@ -6,11 +6,19 @@ FROM python:3.11
 #   ripgrep         - used by Hermes' code/search tools
 #   ffmpeg          - clip cutting / audio extraction (tools/clipper, transcript)
 #   Node.js 22      - Hermes requires Node >=22.12
+#   tor             - SOCKS5 proxy so yt-dlp / transcript traffic exits via Tor
+#                     exit nodes (not the datacenter IP), bypassing proxy-provider
+#                     throttling on YouTube video downloads.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl git xz-utils ripgrep ffmpeg ca-certificates \
+        curl git xz-utils ripgrep ffmpeg ca-certificates tor \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Tor: SOCKS5 on 127.0.0.1:9050 (no local network exposure — loopback only).
+RUN printf 'SocksPort 127.0.0.1:9050\nSafeSocks 1\nTestSocks 1\n' \
+        > /etc/tor/torrc \
+    && chmod 644 /etc/tor/torrc
 
 # --- Non-root user (hygiene; not required on a VPS, kept to avoid running as root) ---
 RUN useradd -m -u 1000 user
