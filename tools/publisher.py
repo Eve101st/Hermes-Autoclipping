@@ -39,7 +39,9 @@ _POSTS_URL = f"{_BASE}/v2/posts"
 #   {"accountId": "acc_456", "platform": "youtube", "target": {"targetType": "youtube"},
 #     "content": {"title": "My clip", "privacyStatus": "public", "shouldNotifySubscribers": false}}
 # Loaded from the BLOTATO_TARGETS env var (JSON array) if present, else this default.
-BLOTATO_TARGETS: list[dict] = json.loads(os.getenv("BLOTATO_TARGETS", "[]"))
+# `or "[]"` (not getenv's default) so a present-but-empty BLOTATO_TARGETS= line in
+# .env is treated as "no targets" rather than crashing json.loads on an empty string.
+BLOTATO_TARGETS: list[dict] = json.loads(os.getenv("BLOTATO_TARGETS") or "[]")
 
 
 def _headers() -> dict:

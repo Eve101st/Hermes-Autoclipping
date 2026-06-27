@@ -38,6 +38,13 @@ start_gateway() {
         echo "[start]   -> run 'hermes gateway setup' inside the container, then restart."
         return 0
     fi
+    # `hermes gateway` reads the bot token + allowlists from the process
+    # environment, not from $HERMES_HOME/.env directly. `hermes gateway setup`
+    # writes them to that file, so load them into the env before launching, or
+    # the gateway comes up with "no messaging platforms enabled".
+    set -a
+    . "$HERMES_HOME/.env"
+    set +a
     echo "[start] launching Hermes Telegram gateway (hermes gateway) ..."
     hermes gateway \
         || echo "[start] Hermes gateway exited — is the model (Owl Alpha) configured? ('hermes model')"
