@@ -30,12 +30,31 @@ services:
     env_file: .env          # FAL_KEY, BLOTATO_API_KEY, BLOTATO_TARGETS
     volumes:
       - hermes-data:/data   # persistent Hermes home (HERMES_HOME=/data/.hermes)
+      - tg-bot-api-data:/var/lib/telegram-bot-api  # SAME path as the bot-api server
+                                                   # so Hermes can read local_mode paths
+    depends_on:
+      - telegram-bot-api
     expose:
       - "7860"              # internal only; published by caddy, not bound to the host
     # For local testing without the proxy, comment out `caddy` below and instead
     # publish the port to localhost:
     #   ports:
     #     - "127.0.0.1:7860:7860"
+
+  # Self-hosted Telegram Bot API server — raises the bot file limit from 20MB to
+  # 2GB and (with --local) writes uploads to disk for Hermes to read directly.
+  # Needs TELEGRAM_API_ID / TELEGRAM_API_HASH (from my.telegram.org/apps) in .env.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
+      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
+      TELEGRAM_LOCAL: "1"
+    volumes:
+      - tg-bot-api-data:/var/lib/telegram-bot-api
+    expose:
+      - "8081"   # internal only; the app talks to it over the compose network
 
   caddy:
     image: caddy:2
@@ -54,3 +73,4 @@ volumes:
   hermes-data:
   caddy-data:
   caddy-config:
+  tg-bot-api-data:
