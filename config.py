@@ -18,3 +18,10 @@ load_dotenv()
 # them from its own /data/.hermes/.env (set via `hermes gateway setup`).
 FAL_KEY = os.getenv("FAL_KEY")
 BLOTATO_API_KEY = os.getenv("BLOTATO_API_KEY")
+
+# Residential proxy for YouTube only (yt-dlp + youtube-transcript-api). Datacenter
+# IPs (a VPS) get blocked by YouTube, so transcript + VOD download route through
+# this. Format: http://user:pass@host:port (e.g. a Geonode rotating residential
+# endpoint). Empty -> direct (expect YT IP blocks). fal/Blotato/Telegram do NOT
+# use it.
+YT_PROXY = os.getenv("YT_PROXY")

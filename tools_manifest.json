@@ -24,6 +24,21 @@
       }
     },
     {
+      "name": "download_video",
+      "description": "Download a YouTube/Twitch VOD to a local mp4 (routes through the YT_PROXY residential proxy when set) and return its path, for cut_clips to use.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "video_url": { "type": "string", "description": "YouTube or Twitch video URL" }
+        },
+        "required": ["video_url"]
+      },
+      "output_schema": {
+        "type": "string",
+        "description": "Local filesystem path to the downloaded mp4."
+      }
+    },
+    {
       "name": "identify_moments",
       "description": "From a transcript, return the top TEN clip-worthy windows (each <=2 minutes, on natural sentence boundaries; clipper adds a 2s lead buffer).",
       "input_schema": {

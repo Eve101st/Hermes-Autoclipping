@@ -38,6 +38,21 @@ _REQUEST_DELAY_SECONDS = 1.0
 _WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 
+def _proxy_url() -> str | None:
+    """Residential proxy for YouTube (http://user:pass@host:port), or None.
+
+    Read at call time so the value is picked up whenever the env is set; applied
+    to youtube-transcript-api and yt-dlp so a VPS's datacenter IP isn't blocked.
+    """
+    return os.getenv("YT_PROXY") or None
+
+
+def _ydl_proxy_opts() -> dict:
+    """yt-dlp options carrying the proxy, if configured (else empty)."""
+    proxy = _proxy_url()
+    return {"proxy": proxy} if proxy else {}
+
+
 # --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
@@ -107,9 +122,21 @@ def _youtube_captions(url: str) -> list[dict]:
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
-        raw = YouTubeTranscriptApi.get_transcript(video_id)
+        # youtube-transcript-api v1.x: instance API (`.fetch`), with optional
+        # residential proxy. (The old static `.get_transcript` was removed.)
+        proxy = _proxy_url()
+        if proxy:
+            from youtube_transcript_api.proxies import GenericProxyConfig
+
+            api = YouTubeTranscriptApi(
+                proxy_config=GenericProxyConfig(http_url=proxy, https_url=proxy)
+            )
+        else:
+            api = YouTubeTranscriptApi()
+
+        raw = api.fetch(video_id).to_raw_data()  # [{text, start, duration}, ...]
     except Exception:
-        # No transcript, transcripts disabled, region block, etc. -> fall back.
+        # No transcript, transcripts disabled, region/IP block, etc. -> fall back.
         return []
 
     return [{"start": item["start"], "text": item["text"]} for item in raw]
@@ -133,6 +160,7 @@ def _twitch_captions(url: str) -> list[dict]:
             "outtmpl": outtmpl,
             "quiet": True,
             "no_warnings": True,
+            **_ydl_proxy_opts(),
         }
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -211,6 +239,7 @@ def _download_audio(url: str) -> str:
         "outtmpl": outtmpl,
         "quiet": True,
         "no_warnings": True,
+        **_ydl_proxy_opts(),
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",

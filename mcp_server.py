@@ -25,6 +25,7 @@ from fastmcp import FastMCP
 from tools.analyzer import analyze_clips as _analyze_clips
 from tools.analyzer import identify_moments as _identify_moments
 from tools.clipper import cut_clips as _cut_clips
+from tools.downloader import download_video as _download_video
 from tools.publisher import publish_clips as _publish_clips
 from tools.transcript import get_transcript as _get_transcript
 
@@ -39,6 +40,17 @@ def get_transcript(video_url: str) -> str:
     when available, else falls back to faster-whisper on the audio.
     """
     return _get_transcript(video_url)
+
+
+@mcp.tool
+def download_video(video_url: str) -> str:
+    """Download a YouTube/Twitch VOD to a local mp4 and return its path.
+
+    Routes through the residential proxy (YT_PROXY) automatically, so YouTube's
+    datacenter-IP blocks don't stop it. Call this to get the local video file
+    that cut_clips needs — do NOT use any other download/transcript tool.
+    """
+    return _download_video(video_url)
 
 
 @mcp.tool
