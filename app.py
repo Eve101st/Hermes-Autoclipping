@@ -26,9 +26,6 @@ def _dispatch(tool_name: str):
     if tool_name == "get_transcript":
         from tools.transcript import get_transcript
         return get_transcript
-    if tool_name == "download_video":
-        from tools.downloader import download_video
-        return download_video
     if tool_name == "identify_moments":
         from tools.analyzer import identify_moments
         return identify_moments

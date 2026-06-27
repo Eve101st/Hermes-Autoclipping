@@ -24,18 +24,29 @@
       }
     },
     {
-      "name": "download_video",
-      "description": "Download a YouTube/Twitch VOD to a local mp4 (routes through the YT_PROXY residential proxy when set) and return its path, for cut_clips to use.",
+      "name": "cut_clips",
+      "description": "Download ONLY the needed segments from a source VOD (via yt-dlp --download-sections), cut each to 9:16 vertical, write to /tmp/clips. Audio+video stay together.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "video_url": { "type": "string", "description": "YouTube or Twitch video URL" }
+          "video_url": { "type": "string", "description": "YouTube or Twitch video URL" },
+          "timestamps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": { "type": ["string", "number"] },
+                "end": { "type": ["string", "number"] }
+              },
+              "required": ["start", "end"]
+            }
+          }
         },
-        "required": ["video_url"]
+        "required": ["video_url", "timestamps"]
       },
       "output_schema": {
-        "type": "string",
-        "description": "Local filesystem path to the downloaded mp4."
+        "type": "array",
+        "items": { "type": "string", "description": "Output clip file path" }
       }
     },
     {

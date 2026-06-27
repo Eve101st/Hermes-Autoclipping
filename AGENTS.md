@@ -90,7 +90,7 @@ or via the MCP wrapper.
 | Transcript | `transcript.get_transcript(video_url)` | YouTube → `youtube-transcript-api` (~1s pacing); Twitch → `yt-dlp` subtitles; fallback → `faster-whisper` (CPU) on yt-dlp-extracted audio. Returns `[HH:MM:SS] text` lines. |
 | Moment selection | `analyzer.identify_moments(transcript)` | Nemotron text endpoint → top **ten** windows `{start,end,reason}`, each **≤2 min**, on **sentence boundaries** (see §4a). |
 | Clip analysis | `analyzer.analyze_clips(clip_paths)` | Nemotron video endpoint (mp4, ≤1080p, **≤2 min**) → per clip `{best moment, caption, virality_score}`. |
-| Cutting | `clipper.cut_clips(video_path, timestamps)` | ffmpeg, center-crop to 1080×1920 (9:16), **2-second lead buffer** (`LEAD_BUFFER_SECONDS`), writes `/tmp/clips`. |
+| Cutting | `clipper.cut_clips(video_url, timestamps)` | yt-dlp `--download-sections` fetches ONLY the needed segments (not the full VOD), then ffmpeg center-crops each to 1080×1920 (9:16). **2-second lead buffer** (`LEAD_BUFFER_SECONDS`). Writes `/tmp/clips`. Audio+video stay together — no separate audio download. |
 | Publishing | `publisher.publish_clips(clip_paths, captions)` | Blotato presigned upload → `/v2/posts` per configured target; per-target `content` merge (YouTube title/privacyStatus). |
 
 ### 4a. Pipeline behaviour spec (agents MUST follow this)
@@ -105,17 +105,19 @@ The end-to-end flow Hermes orchestrates over a VOD:
    **natural sentence boundaries / clear pauses, never mid-sentence**. It inspects the
    transcript line at each boundary; if a sentence is in progress it moves the
    boundary to the sentence start/end, and **confirms this in each window's `reason`**.
-4. **Download + cut the VOD** — download the source VOD video (yt-dlp), then
-   `cut_clips(video_path, windows)`. Each cut starts **2 seconds early**
-   (`LEAD_BUFFER_SECONDS`, clamped at 0) as a safety margin so a clip never opens in
-   the middle of a sentence; clips are 9:16 mp4 in `/tmp/clips`.
+4. **Download + cut the VOD** — `cut_clips(vod_url, windows)` uses yt-dlp
+    `--download-sections` to fetch ONLY the ~10 needed segments (not the full VOD),
+    then ffmpeg center-crops each to 9:16. Each cut starts **2 seconds early**
+    (`LEAD_BUFFER_SECONDS`, clamped at 0) as a safety margin so a clip never opens in
+    the middle of a sentence; clips are 9:16 mp4 in `/tmp/clips`. Audio+video stay
+    together — no separate audio download.
 5. **Analyze (Nemotron, re-evaluate the 10)** — `analyze_clips(clips)` (Nemotron
-   video) watches all ten ≤2-min clips and, for **each**, selects the single best
-   **30–60s** moment (length depends on the clip) plus a caption and virality score.
-   The full 2-min clip is the analysis *input* (more context = better Nemotron call);
-   the 30–60s best moment is the *output* that gets published.
-6. **Re-cut to the best moment** — `cut_clips(video_path, best_moments)` again with the
-   30–60s timestamps from step 5 → the final short clips.
+    video) watches all ten ≤2-min clips and, for **each**, selects the single best
+    **30–60s** moment (length depends on the clip) plus a caption and virality score.
+    The full 2-min clip is the analysis *input* (more context = better Nemotron call);
+    the 30–60s best moment is the *output* that gets published.
+6. **Re-cut to the best moment** — `cut_clips(vod_url, best_moments)` again with the
+    30–60s timestamps from step 5 → the final short clips.
 7. **Edit (HyperFrames, orchestrated by Owl Alpha) — 🔨 NOT BUILT YET (§4c).** Add
    TikTok-style word-by-word captions (the §4b spec), styled to match the clip's vibe.
    ffmpeg grabs sample frames → Owl Alpha visually reasons the vibe → caption style is
@@ -304,10 +306,10 @@ Confirm tools are visible to Hermes with `docker compose exec app hermes tools`.
 - Confirm TikTok's exact `privacyLevel` enum value against Blotato's docs.
 - **Implemented:** 10 windows + 2-min cap + sentence-boundary reasoning (§4a);
   clipper 2s lead buffer (`LEAD_BUFFER_SECONDS`); YouTube publishing via per-target
-  `content` merge.
+  `content` merge; clipper now downloads only needed segments via yt-dlp
+  `--download-sections` (§4a step 4) — full-VOD download (and its bandwidth /
+  throttling problem) eliminated; Tor SOCKS5 proxy in the image (§5 start.sh)
+  for residual outbound traffic.
 - Open product question: the pipeline publishes the cut *window* clips. To publish
   only the 30-90s "best moment" from `analyze_clips`, Hermes must re-cut (call
   `cut_clips` again with those timestamps) before `publish_clips`.
-- Pipeline gap: `cut_clips` needs the VOD **video** downloaded locally first
-  (yt-dlp); there is no dedicated download tool yet — Hermes/the orchestrator must
-  fetch the VOD before cutting (§4a step 4).
