@@ -1,7 +1,7 @@
 {
   "name": "autoclipping-tools",
   "description": "Pipeline tools the agent can call: transcript -> moment selection -> cutting -> per-clip analysis -> publishing.",
-  "note": "Hermes Agent discovers tools via MCP (stdio or remote HTTP MCP servers), not a polled manifest. This file is the tool contract used by the POST /tools/{name} bridge in app.py and as the source for an MCP wrapper. See PROJECT_STATUS.md > architecture note.",
+  "note": "Hermes Agent discovers tools via MCP (stdio or remote HTTP MCP servers), not a polled manifest. This file is the tool contract used by the POST /tools/{name} bridge in app.py and as the source for the MCP wrapper (mcp_server.py). See AGENTS.md §6.",
   "transport": {
     "type": "http",
     "base_url": "http://localhost:7860",
@@ -21,32 +21,6 @@
       "output_schema": {
         "type": "string",
         "description": "One segment per line, each prefixed with [HH:MM:SS]."
-      }
-    },
-    {
-      "name": "cut_clips",
-      "description": "Download ONLY the needed segments from a source VOD (via yt-dlp --download-sections), cut each to 9:16 vertical, write to /tmp/clips. Audio+video stay together.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "video_url": { "type": "string", "description": "YouTube or Twitch video URL" },
-          "timestamps": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "start": { "type": ["string", "number"] },
-                "end": { "type": ["string", "number"] }
-              },
-              "required": ["start", "end"]
-            }
-          }
-        },
-        "required": ["video_url", "timestamps"]
-      },
-      "output_schema": {
-        "type": "array",
-        "items": { "type": "string", "description": "Output clip file path" }
       }
     },
     {
@@ -73,11 +47,11 @@
     },
     {
       "name": "cut_clips",
-      "description": "Cut segments from a source video and convert each to 9:16 vertical; writes to /tmp/clips.",
+      "description": "Download ONLY the needed segments from a source VOD (via yt-dlp --download-sections), cut each to 9:16 vertical, write to /tmp/clips. Audio+video stay together.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "video_path": { "type": "string", "description": "Local path to the source video" },
+          "video_url": { "type": "string", "description": "YouTube or Twitch video URL" },
           "timestamps": {
             "type": "array",
             "items": {
@@ -90,7 +64,7 @@
             }
           }
         },
-        "required": ["video_path", "timestamps"]
+        "required": ["video_url", "timestamps"]
       },
       "output_schema": {
         "type": "array",
