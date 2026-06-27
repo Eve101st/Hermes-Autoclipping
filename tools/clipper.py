@@ -46,6 +46,23 @@ def _proxy() -> str | None:
     return os.getenv("YT_PROXY") or os.getenv("TOR_PROXY") or None
 
 
+def _ffmpeg_cut(src: str, start: float, duration: float, out_path: str) -> None:
+    """ffmpeg-cut [start, start+duration] from ``src`` to a 9:16 mp4 at ``out_path``."""
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", f"{start:.3f}",
+        "-i", src,
+        "-t", f"{duration:.3f}",
+        "-vf", _VERTICAL_FILTER,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        out_path,
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
 def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
     """Download only the needed segments from ``video_url`` and cut to 9:16 mp4s.
 
@@ -73,6 +90,15 @@ def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
         sections.append((buffered_start, end))
     if not sections:
         return []
+
+    # Local file (e.g. a Telegram upload) — cut directly, no download/proxy.
+    if os.path.isfile(video_url):
+        outputs: list[str] = []
+        for index, (start, end) in enumerate(sections):
+            out_path = os.path.join(OUTPUT_DIR, f"clip_{index:03d}.mp4")
+            _ffmpeg_cut(video_url, start, end - start, out_path)
+            outputs.append(out_path)
+        return outputs
 
     with tempfile.TemporaryDirectory(prefix="vod_dl_") as tmp:
         outtmpl = os.path.join(tmp, "%(id)s.%(ext)s")
@@ -128,20 +154,7 @@ def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
             duration = end - start
 
             out_path = os.path.join(OUTPUT_DIR, f"clip_{index:03d}.mp4")
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-ss", f"{start:.3f}",
-                "-i", src,
-                "-t", f"{duration:.3f}",
-                "-vf", _VERTICAL_FILTER,
-                "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-c:a", "aac",
-                "-movflags", "+faststart",
-                out_path,
-            ]
-            subprocess.run(cmd, check=True, capture_output=True)
+            _ffmpeg_cut(src, start, duration, out_path)
             outputs.append(out_path)
 
     return outputs

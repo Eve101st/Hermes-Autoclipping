@@ -64,6 +64,11 @@ def get_transcript(video_url: str) -> str:
     if not video_url:
         raise ValueError("video_url is required")
 
+    # Local file (e.g. a Telegram-uploaded video): transcribe it directly with
+    # whisper — no captions API, no yt-dlp, no proxy.
+    if os.path.isfile(video_url):
+        return _render(_whisper_file(video_url))
+
     platform = _detect_platform(video_url)
 
     if platform == "youtube":
@@ -213,6 +218,19 @@ def _parse_vtt(path: str) -> list[dict]:
 def _vtt_time_to_seconds(value: str) -> float:
     hours, minutes, rest = value.split(":")
     return int(hours) * 3600 + int(minutes) * 60 + float(rest)
+
+
+def _whisper_file(path: str) -> list[dict]:
+    """Transcribe a local media file directly with faster-whisper.
+
+    faster-whisper decodes the file's own audio stream (works on mp4/mov/etc.),
+    so no separate ffmpeg extraction or yt-dlp download is needed.
+    """
+    from faster_whisper import WhisperModel
+
+    model = WhisperModel(_WHISPER_MODEL, device="cpu", compute_type="int8")
+    segments, _info = model.transcribe(path)
+    return [{"start": seg.start, "text": seg.text} for seg in segments]
 
 
 def _whisper_fallback(url: str) -> list[dict]:
