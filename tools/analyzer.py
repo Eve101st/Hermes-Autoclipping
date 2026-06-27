@@ -32,13 +32,50 @@ _VIDEO_INPUT_KEY = "video_url"
 
 
 def _ensure_fal_key() -> None:
-    """fal_client reads FAL_KEY from the environment; make sure it's there."""
-    if not config.FAL_KEY:
+    """Make sure fal_client can find ``FAL_KEY`` in the environment.
+
+    Checks env directly (not just the import-time constant from ``config``),
+    so it picks up vars set after startup (e.g. late compose ``env_file``
+    loads). Reads from the container env first, composing env second, local
+    config third — and falls through to the raw key file last.
+    """
+    key = (
+        os.environ.get("FAL_KEY")
+        or config.FAL_KEY
+        or _read_key_from_file()
+    )
+    if not key:
         raise RuntimeError(
-            "FAL_KEY is not set. Add it in the Space's Settings -> Variables and "
-            "secrets (or your local .env)."
+            "FAL_KEY is not set. On the VPS, add it to the .env file on the host "
+            "(next to docker-compose.yml; see .env.example) and restart the "
+            "container:  docker compose restart app   ..."
+            "or in another deployment, set FAL_KEY in the process environment."
         )
-    os.environ.setdefault("FAL_KEY", config.FAL_KEY)
+    os.environ.setdefault("FAL_KEY", key)
+
+
+def _read_key_from_file() -> str | None:
+    """Best-effort: read FAL_KEY from a .env file in the working directory or /app.
+
+    Covers the case where compose ``env_file`` didn't populate the env for this
+    subprocess but the file is present on disk.
+    """
+    for candidate in (
+        os.path.join(os.getcwd(), ".env"),
+        "/app/.env",
+        os.path.join(os.path.expanduser("~"), ".env"),
+    ):
+        try:
+            with open(candidate) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line.startswith("FAL_KEY="):
+                        value = line[len("FAL_KEY="):].strip().strip("\"'")
+                        if value and not value.startswith("#"):
+                            return value
+        except OSError:
+            continue
+    return None
 
 
 def identify_moments(transcript: str) -> list[dict]:
