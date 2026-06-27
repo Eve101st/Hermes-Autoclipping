@@ -36,8 +36,11 @@ start_tor() {
         echo "[start] Tor not installed — skipping SOCKS5 proxy."
         return 0
     fi
-    echo "[start] launching Tor SOCKS5 proxy on 127.0.0.1:9050 ..."
-    tor --runasdaemon 0
+    echo "[start] launching Tor SOCKS5 proxy on 127.0.0.1:9050 (daemon) ..."
+    # --runasdaemon 1 forks Tor into the background and returns; with 0 it would
+    # block start.sh and uvicorn would never come up.
+    tor --runasdaemon 1 >/dev/null 2>&1 \
+        || echo "[start] Tor failed to start (continuing — Smartproxy is primary)."
 }
 stop_tor() {
     if command -v tor >/dev/null 2>&1; then
@@ -46,12 +49,11 @@ stop_tor() {
 }
 
 start_tor
-# Make yt-dlp / curl / the transcript tool use Tor by default. Tools that honor
-# the standard HTTP(S)_PROXY / ALL_PROXY env vars pick this up automatically;
-# yt-dlp also reads HTTPS_PROXY specifically.
-export ALL_PROXY=socks5://127.0.0.1:9050
-export HTTPS_PROXY=socks5://127.0.0.1:9050
-export HTTP_PROXY=socks5://127.0.0.1:9050
+# Tor is kept SCOPED to the YouTube tools via the dedicated TOR_PROXY var (each
+# tool's _proxy() reads YT_PROXY first, then TOR_PROXY). It is deliberately NOT
+# exported as ALL_PROXY/HTTPS_PROXY/HTTP_PROXY, so fal / Blotato / Telegram /
+# Owl Alpha traffic stays DIRECT — routing those through Tor would be slow and is
+# often blocked by those services.
 
 start_gateway() {
     if ! command -v hermes >/dev/null 2>&1; then

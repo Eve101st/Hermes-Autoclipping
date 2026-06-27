@@ -39,15 +39,15 @@ _WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 
 def _proxy_url() -> str | None:
-    """SOCKS5 / http proxy for YouTube traffic, or None.
+    """Proxy for YouTube traffic, or None. Read at call time.
 
-    Reads at call time so the value is picked up whenever the env is set.
-    Prefers the explicit residential ``YT_PROXY`` if present, else falls back
-    to ``HTTPS_PROXY`` / ``ALL_PROXY`` (set by start.sh to route via Tor on the
-    VPS). Applied to youtube-transcript-api and yt-dlp so a VPS's datacenter IP
-    isn't blocked / throttled by YouTube.
+    Primary: the residential ``YT_PROXY`` (Smartproxy). Fallback: ``TOR_PROXY``
+    (the in-container Tor SOCKS5, socks5://127.0.0.1:9050). A DEDICATED var — not
+    the standard HTTPS_PROXY/ALL_PROXY — so it only affects the YouTube tools
+    (yt-dlp / youtube-transcript-api), never fal / Blotato / Telegram, which must
+    stay direct (Tor is slow / often blocked by them).
     """
-    return os.getenv("YT_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("ALL_PROXY") or None
+    return os.getenv("YT_PROXY") or os.getenv("TOR_PROXY") or None
 
 
 def _ydl_proxy_opts() -> dict:
