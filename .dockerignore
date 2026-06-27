@@ -6,6 +6,9 @@
 # Host-only deploy files — not needed inside the image
 docker-compose.yml
 Caddyfile
+# Internal/local-only docs — never bake into the image
+INTERNAL.md
+PROJECT_STATUS.md
 __pycache__/
 *.py[cod]
 .venv/

@@ -5,32 +5,35 @@
 > working here — Claude, Owl Alpha, or any other LLM brought in later — must read
 > this file in full before making changes, running commands, or answering about the
 > system. Key facts:
-> - **This is the VPS branch.** It deploys to a **Tencent VPS via Docker Compose**.
->   The **`main`** branch is the Hugging Face Spaces build — do not mix the two.
->   Why split: HF Spaces and Telegram can't reach each other at the network level,
->   so the Hermes Telegram gateway can't run on HF (§2).
+> - **This is the VPS branch.** It deploys to a **self-hosted Docker host via Docker
+>   Compose**. A separate branch is the managed-Spaces-host build — do not mix the two.
+>   Why split: that managed host can't reach Telegram at the network level, so the
+>   Hermes Telegram gateway can't run there (§2).
 > - **Text model: Owl Alpha**, configured inside Hermes Agent (`hermes model`). There
 >   is **no Anthropic key** and no per-task model tiering set up.
 > - **Hermes is baked into the image at build time** and seeded into the `/data`
 >   named volume on first run (§5). A real VPS filesystem preserves exec bits, so
->   there are **no FUSE / exec-bit / Dev-Mode workarounds** here (those are HF-only,
->   on `main`).
-> - **Never `merge main → vps`** — it would drag the HF hosting code back. Cherry-pick
->   shared-file fixes (e.g. `tools/`) between branches instead.
+>   there are **no FUSE / exec-bit / Dev-Mode workarounds** here (those belong to the
+>   managed-host branch).
+> - **Never `merge` the managed-host branch into `vps`** — it would drag that branch's
+>   hosting code back. Cherry-pick shared-file fixes (e.g. `tools/`) between branches.
 > - **Don't commit or push unless explicitly asked** — the maintainer controls git timing.
+> - **Host/account specifics (IPs, URLs, repo + managed-host names) live in
+>   `INTERNAL.md` (gitignored), not here** — keep this file safe to publish.
 
-Single source of truth for this project. **`PROJECT_STATUS.md`** is the running,
-plain-English status log; this file is the durable technical reference.
-**`STARTUP_GUIDE.md`** is the deploy/configure runbook. A short `CLAUDE.md` stub
-points here so Claude Code auto-loads this file.
+Single source of truth for this project. **`README.md`** is the public deploy +
+usage guide; this file is the durable technical reference. **`PROJECT_STATUS.md`**
+(running status log) and **`INTERNAL.md`** (host/account specifics) are
+**gitignored, local-only**. A short `CLAUDE.md` stub points here so Claude Code
+auto-loads this file.
 
-**Maintainer:** devproxa (evedarkness18@gmail.com) · **Last updated:** 2026-06-26
+**Last updated:** 2026-06-27 · Maintainer details: see `INTERNAL.md` (gitignored).
 
 ---
 
 ## 1. What this is
 
-A Docker-based automation pipeline running on a **Tencent VPS** (Docker Compose),
+A Docker-based automation pipeline running on a **self-hosted Docker host** (Docker Compose),
 orchestrated by **Hermes Agent** (NousResearch). The pipeline: fetch a video
 transcript → pick clip-worthy moments → cut vertical clips → analyze each clip →
 publish to socials.
@@ -42,20 +45,20 @@ that exposes each pipeline tool for direct testing.
 
 | Property | Value |
 |----------|-------|
-| Host | Tencent VPS (Docker + Docker Compose) |
+| Host | a self-hosted Docker host / VPS (Docker + Docker Compose) |
 | Orchestration | `docker-compose.yml` — `app` (FastAPI + Hermes) + `caddy` (reverse proxy / TLS) |
-| Deploy source | a **GitHub** repo (separate account); the VPS clones the `vps` branch from there |
+| Deploy source | a Git repo the host clones the `vps` branch from (URL in `INTERNAL.md`) |
 | App port | `7860` (internal; published via Caddy, not bound to the host) |
 | TLS / domain | Caddy auto-Let's-Encrypt; configure domain + email in `Caddyfile` |
 | Persistent storage | docker **named volume** `hermes-data` mounted at `/data` (`HERMES_HOME=/data/.hermes`) |
 | Deploy | `git pull && docker compose up -d --build` |
 
-- **Two branches.** `main` = Hugging Face Spaces build (the `origin` remote IS the
-  HF Space). `vps` = this VPS build, deployed from GitHub. They diverge permanently;
-  **do not merge `main` into `vps`** (cherry-pick shared fixes instead).
-- The VPS pulls from a GitHub repo under a **separate account** from the HF/client
-  account. Authenticate that push with the other account's PAT or a dedicated SSH
-  key; keep `origin` (the HF Space) untouched.
+- **Two branches.** A separate branch is the managed-Spaces-host build; `vps` is this
+  self-hosted build, deployed from its own Git remote. They diverge permanently;
+  **do not merge the managed-host branch into `vps`** (cherry-pick shared fixes instead).
+- The deploy remote is separate from the managed host's remote — keep them distinct
+  and never push VPS code to the managed host's remote. Concrete URLs / remote names
+  are in `INTERNAL.md` (gitignored).
 
 ## 3. Files
 
@@ -72,9 +75,9 @@ that exposes each pipeline tool for direct testing.
 | `requirements.txt` | `fastapi`, `uvicorn[standard]`, `youtube-transcript-api`, `yt-dlp`, `faster-whisper`, `httpx`, `python-dotenv`, `fal-client`, `requests`, `fastmcp`. |
 | `tools/` | Pipeline tool modules — see §4. |
 | `tools_manifest.json` | Tool contract (input/output schemas) for the REST bridge; mirrors the MCP tools in `mcp_server.py`. |
-| `README.md` | VPS quick-start + branch note. |
-| `PROJECT_STATUS.md` | Plain-English status + build-notes log. |
-| `STARTUP_GUIDE.md` | VPS deploy + configure runbook. |
+| `README.md` | Public deploy + usage guide (consolidated; absorbed the old `STARTUP_GUIDE.md`). |
+| `PROJECT_STATUS.md` | Plain-English status + build-notes log — **gitignored, local-only**. |
+| `INTERNAL.md` | Host/account specifics (IPs, URLs, remotes) — **gitignored, local-only**. |
 | `.env` | Secrets, gitignored — never committed. |
 
 ## 4. Pipeline tools (`tools/`)
@@ -106,12 +109,57 @@ The end-to-end flow Hermes orchestrates over a VOD:
    `cut_clips(video_path, windows)`. Each cut starts **2 seconds early**
    (`LEAD_BUFFER_SECONDS`, clamped at 0) as a safety margin so a clip never opens in
    the middle of a sentence; clips are 9:16 mp4 in `/tmp/clips`.
-5. **Analyze** — `analyze_clips(clips)` (Nemotron video) → best 30–90s, caption, score.
-6. **Publish** — `publish_clips(clips, captions)` to the Blotato targets (§7).
+5. **Analyze (Nemotron, re-evaluate the 10)** — `analyze_clips(clips)` (Nemotron
+   video) watches all ten ≤2-min clips and, for **each**, selects the single best
+   **30–60s** moment (length depends on the clip) plus a caption and virality score.
+   The full 2-min clip is the analysis *input* (more context = better Nemotron call);
+   the 30–60s best moment is the *output* that gets published.
+6. **Re-cut to the best moment** — `cut_clips(video_path, best_moments)` again with the
+   30–60s timestamps from step 5 → the final short clips.
+7. **Edit (HyperFrames, orchestrated by Owl Alpha) — 🔨 NOT BUILT YET (§4c).** Add
+   TikTok-style word-by-word captions (the §4b spec), styled to match the clip's vibe.
+   ffmpeg grabs sample frames → Owl Alpha visually reasons the vibe → caption style is
+   chosen → HyperFrames renders the captions onto the clip. Music is added **manually
+   by the maintainer** for now (a shared music folder may be added later).
+8. **Approval gate** — present the finished clips with virality scores + captions and
+   **wait for the maintainer to approve** (which ones to post). Do not auto-publish.
+9. **Publish** — on approval, `publish_clips(clips, captions)` to the Blotato targets (§7).
 
 > Why the buffer + reasoning are belt-and-suspenders: the model is *instructed* to pick
 > clean boundaries (step 3), and the cutter *also* pads 2s at the start (step 4), so
 > even an imperfect boundary won't clip someone mid-word.
+
+### 4b. TikTok caption / editing spec (for the §4c editing build)
+
+The editing stage renders captions in the current short-form convention (researched
+2026-06-27):
+
+- **Word-by-word / 2–3-word "karaoke" reveal**, synced to speech (Whisper word-level
+  timings via HyperFrames `transcribe`). Static full-sentence subtitles are dated.
+- **Font:** bold/UPPERCASE sans-serif — Montserrat Bold, Bebas Neue, Impact, or
+  **TikTok Sans** (open-sourced mid-2025, usable in external editors).
+- **Contrast:** white or yellow fill + heavy black outline/stroke; ≥4.5:1 contrast.
+- **Vibe highlight:** one key word per phrase popped in a vibe color (yellow/red/green).
+  This is where "match the vibe of the clip" lives — chosen from the ffmpeg-frame
+  visual reasoning (hype / emotional / educational / funny → color + animation intensity).
+- **Placement:** lower-middle third. At 1080×1920, caption band ≈ y 1200–1300px; keep
+  clear of the bottom ~370px (platform UI).
+- **Timing:** ~20–27 chars max on screen, short min-duration per cue; fast cadence.
+
+### 4c. Editing stage build (HyperFrames) — NOT BUILT, for a future build prompt
+
+What the editing stage needs (no code yet — do not build ahead of a build prompt):
+
+- Install **HyperFrames** + headless Chromium in the image (render path), Node already present.
+- **Word-level transcription** of each 30–60s clip (HyperFrames `transcribe` / Whisper)
+  for caption timing.
+- **ffmpeg frame capture** → feed frames to Owl Alpha (or Nemotron video) for **visual
+  reasoning** about the clip's vibe → pick caption style per §4b.
+- A **HyperFrames captions composition** that takes the clip + word timings + style and
+  renders the final captioned mp4.
+- **Orchestration wiring:** either a new MCP tool (e.g. `edit_clip`) or Owl Alpha
+  shell-driving the HyperFrames CLI, slotted between re-cut (step 6) and approval (step 8).
+- **Music:** deferred — maintainer adds music manually; a shared music folder may come later.
 
 ## 5. Build & deploy
 
@@ -124,8 +172,8 @@ required on a VPS). Node.js 22, `xz-utils`, `git`, `ripgrep`, `ffmpeg`, `curl`.
 
 - The installer puts code + its managed Node + its managed uv all under
   `$HERMES_HOME` (`/data/.hermes`). On a VPS the build filesystem is real, so the
-  install runs cleanly during `docker build` (unlike HF, where `/data` is a
-  runtime-only FUSE mount that drops the +x bit — none of that applies here).
+  install runs cleanly during `docker build` (unlike the managed-host branch, where
+  `/data` is a runtime-only FUSE mount that drops the +x bit — none of that applies here).
 - Install line:
   `curl -fsSL …/install.sh | bash -s -- --skip-setup --skip-browser --non-interactive`,
   run as the `user` after `mkdir -p /data/.hermes && chown -R user:user /data`.
@@ -243,9 +291,9 @@ Confirm tools are visible to Hermes with `docker compose exec app hermes tools`.
 
 ## 11. Open items
 
-- Provision the Tencent VPS (Docker + Compose), domain DNS, and open ports 80/443.
-- Create the GitHub repo (separate account), push `main` + `vps`, set it as the
-  VPS's clone source. Keep `origin` = the HF Space untouched.
+- Provision the host (Docker + Compose), domain DNS, and open ports 80/443.
+- Keep the deploy remote distinct from the managed host's remote; never push VPS code
+  to the managed host's remote. (Concrete remotes/URLs in `INTERNAL.md`.)
 - Set `.env` (`FAL_KEY`, `BLOTATO_API_KEY`, `BLOTATO_TARGETS`); set `Caddyfile`
   domain + email.
 - Verify the first build bakes Hermes and `GET /` reports `hermes: installed`.
