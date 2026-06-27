@@ -38,6 +38,9 @@ def _dispatch(tool_name: str):
     if tool_name == "publish_clips":
         from tools.publisher import publish_clips
         return publish_clips
+    if tool_name == "cleanup_files":
+        from tools.cleanup import cleanup_files
+        return cleanup_files
     return None
 
 

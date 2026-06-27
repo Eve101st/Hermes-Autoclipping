@@ -24,6 +24,7 @@ from fastmcp import FastMCP
 
 from tools.analyzer import analyze_clips as _analyze_clips
 from tools.analyzer import identify_moments as _identify_moments
+from tools.cleanup import cleanup_files as _cleanup_files
 from tools.clipper import cut_clips as _cut_clips
 from tools.publisher import publish_clips as _publish_clips
 from tools.transcript import get_transcript as _get_transcript
@@ -70,6 +71,15 @@ def publish_clips(clip_paths: list[str], captions: list[str]) -> list[dict]:
     """Upload each clip to Blotato and create a post per configured target
     (useNextFreeSlot). Returns one result per clip/target."""
     return _publish_clips(clip_paths, captions)
+
+
+@mcp.tool
+def cleanup_files() -> dict:
+    """Free disk: delete the stored uploaded videos/transcripts and generated
+    clips (/tmp/clips + Hermes' upload cache + the Bot API server's downloads).
+    Call this when the user asks to clean up / says /cleanup. Returns a summary
+    {files_deleted, freed_mb, locations}."""
+    return _cleanup_files()
 
 
 if __name__ == "__main__":

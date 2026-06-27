@@ -129,6 +129,22 @@
           }
         }
       }
+    },
+    {
+      "name": "cleanup_files",
+      "description": "Free disk: delete stored uploaded videos/transcripts and generated clips (/tmp/clips + Hermes upload cache + Bot API downloads). Call when the user asks to clean up / says /cleanup.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "files_deleted": { "type": "integer" },
+          "freed_mb": { "type": "number" },
+          "locations": { "type": "array", "items": { "type": "object" } }
+        }
+      }
     }
   ]
 }
