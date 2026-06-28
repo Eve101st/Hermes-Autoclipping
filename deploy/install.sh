@@ -21,14 +21,17 @@ set -euo pipefail
 APP_DIR=/opt/autoclipping
 RUN_USER=ubuntu
 UPLOAD_DIR=/var/lib/telegram-bot-api
+# Python: Ubuntu 22.04 ships 3.10 (3.11 is only an RC in its repos). The tools need
+# >=3.10 (fastmcp), so prefer the system default 3.10; override by exporting PYTHON.
+PYTHON="${PYTHON:-python3.10}"
 
-echo "[install] APP_DIR=$APP_DIR RUN_USER=$RUN_USER"
+echo "[install] APP_DIR=$APP_DIR RUN_USER=$RUN_USER PYTHON=$PYTHON"
 
 # --- 1. System dependencies (mirror the old Dockerfile, minus container scaffolding) ---
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  python3.11 python3.11-venv python3-pip \
+  "$PYTHON" "${PYTHON}-venv" python3-pip \
   ffmpeg git ripgrep curl xz-utils ca-certificates tor
 
 # Node.js 22 (Hermes requires >=22.12) — same NodeSource channel the Dockerfile used.
@@ -51,7 +54,7 @@ TORRC
 
 # --- 3. Project venv (tools only; Hermes keeps its own managed runtime under ~/.hermes) ---
 if [ ! -d "$APP_DIR/.venv" ]; then
-  sudo -u "$RUN_USER" python3.11 -m venv "$APP_DIR/.venv"
+  sudo -u "$RUN_USER" "$PYTHON" -m venv "$APP_DIR/.venv"
 fi
 sudo -u "$RUN_USER" "$APP_DIR/.venv/bin/pip" install --upgrade pip
 sudo -u "$RUN_USER" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
