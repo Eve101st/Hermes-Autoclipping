@@ -1,0 +1,25 @@
+[Unit]
+# Self-hosted Telegram Bot API server — raises the bot upload limit 20MB -> 2GB and,
+# with --local, writes uploaded files to disk so Hermes reads them as local paths.
+Description=Local Telegram Bot API server (2GB uploads, --local)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+# TELEGRAM_API_ID / TELEGRAM_API_HASH (from https://my.telegram.org) live here.
+# Keep this file 0600 ubuntu:ubuntu.
+EnvironmentFile=/opt/autoclipping/.env
+# Prebuilt static binary (decision D2) — pin the exact release in INTERNAL.md.
+# NOTE: telegram-bot-api has no bind-address flag; it listens on 0.0.0.0:8081.
+# Restrict reach to loopback with a firewall (ufw deny in to any port 8081, allow
+# from 127.0.0.1) — anyone who reaches this port controls the bot.
+ExecStart=/usr/local/bin/telegram-bot-api \
+  --api-id=${TELEGRAM_API_ID} --api-hash=${TELEGRAM_API_HASH} \
+  --local --http-port=8081 --dir=/var/lib/telegram-bot-api
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

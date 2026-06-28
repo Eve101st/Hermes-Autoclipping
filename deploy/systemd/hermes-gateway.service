@@ -1,0 +1,28 @@
+[Unit]
+# Hermes Agent Telegram gateway. Default transport is outbound long-polling
+# (decision D1) — no inbound port, no TLS, no Caddy. Webhook would be env-driven
+# (TELEGRAM_WEBHOOK_URL/_SECRET/_PORT); intentionally unset.
+Description=Hermes Agent Telegram gateway
+After=network-online.target telegram-bot-api.service tor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/autoclipping
+# `hermes gateway` reads the bot token + allowlist from the PROCESS env; `hermes
+# gateway setup` writes them to ~/.hermes/.env, so load that file or the gateway
+# comes up "no messaging platforms enabled" (this is what start.sh's `set -a; . .env`
+# did under Docker).
+#   IMPORTANT: FAL_KEY / BLOTATO_* must NOT be here — Hermes strips the gateway env
+#   from the stdio MCP subprocess. Those go in the mcp_servers.autoclipping.env:
+#   block in ~/.hermes/config.yaml only (see MIGRATION_BUILD_PROMPT.md §6).
+EnvironmentFile=/home/ubuntu/.hermes/.env
+# Path mirrors the Docker image's HERMES_HOME layout (.../hermes-agent/venv/bin).
+# Verify on-host after `hermes` install: `command -v hermes`.
+ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes gateway
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
