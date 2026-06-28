@@ -27,6 +27,9 @@ from tools.analyzer import identify_moments as _identify_moments
 from tools.cleanup import cleanup_files as _cleanup_files
 from tools.clipper import cut_clips as _cut_clips
 from tools.publisher import publish_clips as _publish_clips
+from tools.reframe import capture_frame as _capture_frame
+from tools.reframe import qa_frames as _qa_frames
+from tools.reframe import reframe_vertical as _reframe_vertical
 from tools.transcript import get_transcript as _get_transcript
 
 mcp = FastMCP("autoclipping")
@@ -80,6 +83,39 @@ def cleanup_files() -> dict:
     Call this when the user asks to clean up / says /cleanup. Returns a summary
     {files_deleted, freed_mb, locations}."""
     return _cleanup_files()
+
+
+@mcp.tool
+def capture_frame(video_path: str, at_seconds: float = 0.0) -> str:
+    """Grab ONE frame from a local video at `at_seconds` → a PNG path. Use it to
+    PROBE a clip for the vision model (classify content / locate the facecam +
+    gameplay + point-of-interest) before reframing, and for QA. Returns the PNG path."""
+    return _capture_frame(video_path, at_seconds)
+
+
+@mcp.tool
+def reframe_vertical(src: str, out_path: str, layout: dict | None = None,
+                     start: float | None = None, duration: float | None = None) -> str:
+    """Render a LOCAL video to a 1080x1920 (9:16) mp4 per `layout`, optionally cutting
+    [start, start+duration] first. Keeps gameplay AND facecam as moving video — use
+    this instead of a blind center-crop for streamer content. `layout` = {"mode": ...}:
+      center   — scale-to-cover + center-crop (may lose edges);
+      fit_blur — whole frame fit to width over a blurred fill (nothing lost);
+      crop     — crop {region:{x,y,w,h}} then cover to 9:16;
+      split    — stack two regions (top/bottom {x,y,w,h}, optional top_h) e.g. gameplay
+                 over facecam;
+      overlay  — base region fills 9:16, cam region overlaid as PIP (base/cam {x,y,w,h},
+                 optional pip_w/pos_x/pos_y).
+    Regions are SOURCE pixel coords from the vision probe. Returns out_path."""
+    return _reframe_vertical(src, out_path, layout, start, duration)
+
+
+@mcp.tool
+def qa_frames(clip_path: str) -> dict:
+    """Capture the FIRST and LAST frame of a finished clip for a QA vision check
+    (verify the reframe/crop is correct — facecam + gameplay visible, point-of-interest
+    in frame, no stray bars). Returns {first, last, duration}."""
+    return _qa_frames(clip_path)
 
 
 if __name__ == "__main__":

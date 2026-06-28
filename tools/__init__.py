@@ -11,4 +11,7 @@ Functions:
     clipper.cut_clips(video_path, timestamps)   -> list[str]
     publisher.publish_clips(clip_paths, captions) -> list[dict]
     cleanup.cleanup_files()                     -> dict
+    reframe.capture_frame(video_path, at)       -> str (png)
+    reframe.reframe_vertical(src, out, layout)  -> str (mp4)
+    reframe.qa_frames(clip_path)                -> dict
 """

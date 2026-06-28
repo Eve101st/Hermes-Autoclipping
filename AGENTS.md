@@ -92,7 +92,7 @@ here as the **run user**; the concrete username + VPS IP are in `INTERNAL.md`). 
 ## 4. Pipeline tools (`tools/`)
 
 Plain functions, no framework coupling. Callable directly, via `scripts/call_tool.py`,
-or via the MCP wrapper. **Six** tools:
+or via the MCP wrapper. **Nine** tools (the last three are the §4d reframe building blocks):
 
 | Tool | Function | Notes |
 |------|----------|-------|
@@ -102,6 +102,9 @@ or via the MCP wrapper. **Six** tools:
 | Cutting | `clipper.cut_clips(video_path, timestamps)` | `video_path` is a **local video file (a Telegram upload)** — ffmpeg center-crops each window to 1080×1920 (9:16), **2-second lead buffer** (`LEAD_BUFFER_SECONDS`). Writes `/tmp/clips`. Audio+video stay together. **No URL download** — source videos arrive as uploads (§7). |
 | Publishing | `publisher.publish_clips(clip_paths, captions)` | Blotato presigned upload → `/v2/posts` per configured target; per-target `content` merge (YouTube title/privacyStatus). |
 | Cleanup | `cleanup.cleanup_files()` | Frees disk: deletes stored uploads/transcripts + generated clips (`/tmp/clips`, the Hermes upload cache, the Bot API server's downloads). Returns `{files_deleted, freed_mb, locations}`. Triggered by `/cleanup`. |
+| Frame probe | `reframe.capture_frame(video_path, at_seconds)` | ffmpeg grabs ONE frame → PNG, for the vision probe (§4d/§8) and QA. |
+| Vertical reframe | `reframe.reframe_vertical(src, out_path, layout, start, duration)` | Renders 1080×1920 per `layout` (`center`/`fit_blur`/`crop`/`split`/`overlay`), optionally cutting a window first. Keeps gameplay + facecam as moving video (§4d). |
+| QA frames | `reframe.qa_frames(clip_path)` | Captures the first + last frame of a finished clip for a QA vision check (§4d). |
 
 ### 4a. Pipeline behaviour spec (agents MUST follow this)
 
@@ -165,6 +168,52 @@ What the editing stage needs (no code yet — do not build ahead of a build prom
   the HyperFrames CLI, slotted between re-cut (step 6) and approval (step 8).
 - **Music:** deferred — added manually; a shared music folder may come later.
 
+### 4d. Smart vertical reframe + layout composition + QA (spec — partially built)
+
+**The problem:** a blind center-crop to 9:16 butchers anything that isn't centered —
+especially **streamer gameplay**, where the facecam is a corner and the action fills the
+wide frame. Center-cropping either loses the facecam or crops out the gameplay. The
+reframe stage must compose each 9:16 clip **intelligently**, and both the gameplay and
+the facecam must stay **moving video** (never a still).
+
+**The flow (reframe happens BEFORE captions §4c):**
+
+1. **Probe** — `capture_frame()` grabs a frame (ffmpeg) at the clip's start (optionally
+   mid/multiple) → feed to the vision model (§8) → classify the content and locate
+   regions as bounding boxes:
+   - content type: single-cam / talking-head vs **gameplay-with-facecam** vs
+     full-screen gameplay vs slideshow;
+   - the **facecam** box, the **gameplay/action** region, and the current
+     **point-of-interest** (where the character / action / focus is).
+2. **Choose a layout** per content type:
+   - talking-head / centered subject → crop to the subject (not a blind center crop);
+   - **gameplay + facecam** → compose BOTH as video — either **split-screen** (gameplay
+     panel + facecam panel stacked to fill 9:16) or **facecam overlay (picture-in-
+     picture)** placed over the gameplay near/over the point-of-interest, or wherever it
+     least obscures the action;
+   - full-screen gameplay (no facecam) → crop/track to the point-of-interest, or
+     **fit-with-blur** so nothing is lost.
+3. **Render** — `reframe.reframe_vertical()` builds the ffmpeg filter graph for the chosen
+   layout (crop / scale / `vstack` / `overlay` / pad) → 1080×1920 mp4, facecam + gameplay
+   both still moving video.
+4. **QA** — `qa_frames()` captures the **first and last frame of the FINAL edited clip** →
+   feed to the vision model → verify the crop/composition is correct (facecam visible,
+   gameplay visible, point-of-interest in frame, no stray black bars / misalignment). If
+   QA fails, adjust the layout params and re-render.
+
+**Architecture split:** the **deterministic ffmpeg compositor** (modes + given regions)
+lives in `tools/reframe.py` and is exposed as MCP tools (`capture_frame`,
+`reframe_vertical`, `qa_frames`); the **intelligence** (probe → vision classify → pick
+layout + regions → QA verify, then re-render on failure) is orchestrated by the agent
+(Owl Alpha) using the vision model. The compositor takes explicit regions/mode so it
+stays testable and deterministic.
+
+**Build status:** the deterministic compositor + frame/QA capture are built (the modes:
+`center`, `fit_blur`, `crop`, `split`, `overlay`). The vision-driven *decisioning* (auto
+classify + region detection + the QA-retry loop) is the agent-orchestration / editing-
+stage work — see the build prompt. Reframe (§4d) runs **before** captions (§4c): captions
+are rendered on top of the correctly-reframed clip.
+
 ## 5. Build & deploy (bare metal)
 
 `deploy/install.sh` does the whole host bootstrap, idempotently, as a sudo-capable run
@@ -207,7 +256,8 @@ mcp_servers:
       BLOTATO_TARGETS: '<json-array>'
       TOR_PROXY: "socks5://127.0.0.1:9050"
     tools:
-      include: [get_transcript, identify_moments, cut_clips, analyze_clips, publish_clips, cleanup_files]
+      include: [get_transcript, identify_moments, cut_clips, analyze_clips, publish_clips,
+                cleanup_files, capture_frame, reframe_vertical, qa_frames]
 ```
 
 - **Env caveat (critical):** Hermes passes the stdio MCP subprocess **only** the `env:`

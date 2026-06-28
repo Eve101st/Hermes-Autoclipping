@@ -19,7 +19,7 @@ Examples:
 import json
 import sys
 
-from tools import analyzer, cleanup, clipper, publisher, transcript
+from tools import analyzer, cleanup, clipper, publisher, reframe, transcript
 
 DISPATCH = {
     "get_transcript": transcript.get_transcript,
@@ -28,6 +28,9 @@ DISPATCH = {
     "cut_clips": clipper.cut_clips,
     "publish_clips": publisher.publish_clips,
     "cleanup_files": cleanup.cleanup_files,
+    "capture_frame": reframe.capture_frame,
+    "reframe_vertical": reframe.reframe_vertical,
+    "qa_frames": reframe.qa_frames,
 }
 
 
