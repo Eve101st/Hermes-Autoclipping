@@ -1,10 +1,11 @@
 # Secrets — provided via the process environment on the VPS, never committed
 .env
 
-# Internal-only docs (host/account specifics + running status log) — kept local,
-# never committed, so the repo is safe to make public.
+# Internal-only docs (host/account specifics + running status log + session
+# handoffs) — kept local, never committed, so the repo is safe to make public.
 INTERNAL.md
 PROJECT_STATUS.md
+SESSION_HANDOFF.md
 
 # Claude Code local settings
 .claude/
