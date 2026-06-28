@@ -8,7 +8,7 @@ Functions:
     transcript.get_transcript(video_url)        -> str
     analyzer.identify_moments(transcript)       -> list[dict]
     analyzer.analyze_clips(clip_paths)          -> list[dict]
-    clipper.cut_clips(video_url, timestamps)    -> list[str]
+    clipper.cut_clips(video_path, timestamps)   -> list[str]
     publisher.publish_clips(clip_paths, captions) -> list[dict]
     cleanup.cleanup_files()                     -> dict
 """

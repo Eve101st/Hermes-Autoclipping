@@ -12,7 +12,7 @@ Usage:
 
 Examples:
     python scripts/call_tool.py get_transcript '{"video_url": "https://youtu.be/..."}'
-    python scripts/call_tool.py cut_clips '{"video_url": "/path/v.mp4", "timestamps": [...]}'
+    python scripts/call_tool.py cut_clips '{"video_path": "/path/v.mp4", "timestamps": [...]}'
     python scripts/call_tool.py cleanup_files
 """
 

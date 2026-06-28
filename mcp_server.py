@@ -36,8 +36,8 @@ mcp = FastMCP("autoclipping")
 def get_transcript(video_url: str) -> str:
     """Extract a timestamped plain-text transcript. `video_url` is EITHER a
     YouTube/Twitch URL OR a LOCAL file path (e.g. a Telegram-uploaded video at
-    /data/.hermes/cache/videos/...). For a local file it transcribes directly
-    with whisper. Returns one segment per line, each prefixed with [HH:MM:SS].
+    /var/lib/telegram-bot-api/<bot>/videos/...). For a local file it transcribes
+    directly with whisper. Returns one segment per line, prefixed with [HH:MM:SS].
     """
     return _get_transcript(video_url)
 
@@ -50,13 +50,13 @@ def identify_moments(transcript: str) -> list[dict]:
 
 
 @mcp.tool
-def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
-    """Cut the given windows to 9:16 vertical mp4s in /tmp/clips, return paths.
-    `video_url` is EITHER a YouTube/Twitch URL (downloads only the needed
-    segments via yt-dlp --download-sections) OR a LOCAL file path (e.g. a
-    Telegram-uploaded video at /data/.hermes/cache/videos/...), cut directly
-    with ffmpeg — no download. Audio+video stay together."""
-    return _cut_clips(video_url, timestamps)
+def cut_clips(video_path: str, timestamps: list[dict]) -> list[str]:
+    """Cut the given windows out of a LOCAL video file to 9:16 vertical mp4s in
+    /tmp/clips, return paths. `video_path` is a Telegram-uploaded video file on
+    disk (e.g. /var/lib/telegram-bot-api/<bot>/videos/...) — source videos are
+    uploaded to the bot, NOT downloaded from a URL. Cut directly with ffmpeg;
+    audio+video stay together."""
+    return _cut_clips(video_path, timestamps)
 
 
 @mcp.tool

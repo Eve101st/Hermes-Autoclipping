@@ -82,10 +82,14 @@ env — Hermes only passes that block to the tools (`AGENTS.md` §6).
 
 ## Use it
 
-In Telegram, send your bot a video link **or upload a video file**, e.g.:
+In Telegram, **upload the video file** you want clipped — that's what gets cut (the
+self-hosted Bot API server accepts up to 2 GB). Optionally paste a YouTube/Twitch URL
+too if you'd rather pull the transcript from there than transcribe the upload locally.
+Downloading the source video from a URL is **not** supported (it's unviable on a server
+IP) — send the file.
 
 ```
-Clip this: <YouTube or Twitch URL>
+Clip this <upload the video file with the message>
 ```
 
 Hermes runs the pipeline, then (by default) pauses to show you the candidate clips with

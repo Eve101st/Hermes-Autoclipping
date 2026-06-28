@@ -99,7 +99,7 @@ or via the MCP wrapper. **Six** tools:
 | Transcript | `transcript.get_transcript(video_url)` | `video_url` is a YouTube/Twitch URL **or a local file path** (e.g. a Telegram upload). YouTube → `youtube-transcript-api` (~1s pacing); Twitch → `yt-dlp` subtitles; fallback / local file → `faster-whisper` (CPU). Returns `[HH:MM:SS] text` lines. |
 | Moment selection | `analyzer.identify_moments(transcript)` | Nemotron text endpoint → top **ten** windows `{start,end,reason}`, each **≤2 min**, on **sentence boundaries** (§4a). |
 | Clip analysis | `analyzer.analyze_clips(clip_paths)` | Nemotron video endpoint (mp4, ≤1080p, **≤2 min**) → per clip `{best moment, caption, virality_score}`. |
-| Cutting | `clipper.cut_clips(video_url, timestamps)` | URL → yt-dlp `--download-sections` fetches ONLY the needed segments; local path → ffmpeg directly. Center-crops each to 1080×1920 (9:16), **2-second lead buffer** (`LEAD_BUFFER_SECONDS`). Writes `/tmp/clips`. Audio+video stay together. |
+| Cutting | `clipper.cut_clips(video_path, timestamps)` | `video_path` is a **local video file (a Telegram upload)** — ffmpeg center-crops each window to 1080×1920 (9:16), **2-second lead buffer** (`LEAD_BUFFER_SECONDS`). Writes `/tmp/clips`. Audio+video stay together. **No URL download** — source videos arrive as uploads (§7). |
 | Publishing | `publisher.publish_clips(clip_paths, captions)` | Blotato presigned upload → `/v2/posts` per configured target; per-target `content` merge (YouTube title/privacyStatus). |
 | Cleanup | `cleanup.cleanup_files()` | Frees disk: deletes stored uploads/transcripts + generated clips (`/tmp/clips`, the Hermes upload cache, the Bot API server's downloads). Returns `{files_deleted, freed_mb, locations}`. Triggered by `/cleanup`. |
 
@@ -107,23 +107,24 @@ or via the MCP wrapper. **Six** tools:
 
 The end-to-end flow Hermes orchestrates over a VOD:
 
-1. **Transcript** — `get_transcript(source)` → timestamped text. `source` is a URL or a
-   local upload path.
+1. **Transcript** — `get_transcript(source)` → timestamped text. `source` is the Telegram
+   **upload** (transcribed with whisper) or a YouTube/Twitch **URL** (cheap transcript via
+   the API). The video to clip is always the **upload** (steps 4/6).
 2. **Select 10 cuts** — `identify_moments(transcript)` → the text model (Owl Alpha, then
    Nemotron text) returns **exactly ten** candidate windows, **each ≤2 minutes** (target
    ~115s to leave room for the buffer + the Nemotron 2-min video cap).
 3. **Sentence-boundary reasoning (required)** — the model MUST place `start`/`end` on
    **natural sentence boundaries / clear pauses, never mid-sentence**, and **confirm this
    in each window's `reason`**.
-4. **Cut the source** — `cut_clips(source, windows)`: yt-dlp `--download-sections` for
-   URLs (only the ~10 needed segments, not the full VOD) or ffmpeg directly for a local
-   file, then center-crop each to 9:16. Each cut starts **2 seconds early**
-   (`LEAD_BUFFER_SECONDS`, clamped at 0). Clips are 9:16 mp4 in `/tmp/clips`.
+4. **Cut the upload** — `cut_clips(upload_path, windows)`: ffmpeg center-crops each window
+   out of the uploaded local video file to 9:16. Each cut starts **2 seconds early**
+   (`LEAD_BUFFER_SECONDS`, clamped at 0). Clips are 9:16 mp4 in `/tmp/clips`. (Source
+   videos are uploaded to the bot — there is no URL download, §7.)
 5. **Analyze (Nemotron, re-evaluate the 10)** — `analyze_clips(clips)` watches all ten
    ≤2-min clips and, for **each**, selects the single best **30–60s** moment plus a
    caption and virality score. The full 2-min clip is the analysis *input*; the 30–60s
    best moment is the *output* that gets published.
-6. **Re-cut to the best moment** — `cut_clips(source, best_moments)` with the 30–60s
+6. **Re-cut to the best moment** — `cut_clips(upload_path, best_moments)` with the 30–60s
    timestamps from step 5 → the final short clips.
 7. **Edit (HyperFrames, orchestrated by Owl Alpha) — 🔨 NOT BUILT YET (§4c).** Add
    TikTok-style word-by-word captions (§4b), styled to match the clip's vibe. ffmpeg
@@ -319,8 +320,8 @@ Verify: `systemctl is-active hermes-gateway` is `active`; the gateway log
 - **Built / working:** MCP-only tooling (six tools); bare-metal systemd deployment;
   self-hosted 2 GB Telegram uploads with the local-server `logOut` + same-user fix;
   image vision via the fal proxy; 10 windows + 2-min cap + sentence-boundary reasoning
-  (§4a); clipper 2s lead buffer + segment-only download; per-target Blotato publishing;
-  proxy scoped to transcript fetching.
+  (§4a); clipper cuts local uploads with a 2s lead buffer (no URL download); per-target
+  Blotato publishing; proxy scoped to transcript fetching.
 - **Not built (future build prompts):** the HyperFrames editing/captioning stage (§4c).
 - **Operational:** keep the deploy remote distinct from the other branch's remote; fill
   `BLOTATO_TARGETS`; confirm TikTok's `privacyLevel` enum against Blotato's docs.
