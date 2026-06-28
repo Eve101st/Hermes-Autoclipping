@@ -56,9 +56,6 @@ def _ydl_proxy_opts() -> dict:
     return {"proxy": proxy} if proxy else {}
 
 
-# --------------------------------------------------------------------------- #
-# Public entry point
-# --------------------------------------------------------------------------- #
 def get_transcript(video_url: str) -> str:
     """Return a timestamped plain-text transcript for ``video_url``."""
     if not video_url:
@@ -130,8 +127,6 @@ def _youtube_captions(url: str) -> list[dict]:
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
-        # youtube-transcript-api v1.x: instance API (`.fetch`), with optional
-        # residential proxy. (The old static `.get_transcript` was removed.)
         proxy = _proxy_url()
         if proxy:
             from youtube_transcript_api.proxies import GenericProxyConfig

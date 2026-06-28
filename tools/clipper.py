@@ -39,13 +39,6 @@ _VERTICAL_FILTER = (
 )
 
 
-def _proxy() -> str | None:
-    """Proxy for yt-dlp: residential ``YT_PROXY`` first, then ``TOR_PROXY``
-    (in-container Tor SOCKS5). Dedicated vars only — never the global
-    HTTPS_PROXY/ALL_PROXY — so fal / Blotato stay direct."""
-    return os.getenv("YT_PROXY") or os.getenv("TOR_PROXY") or None
-
-
 def _ffmpeg_cut(src: str, start: float, duration: float, out_path: str) -> None:
     """ffmpeg-cut [start, start+duration] from ``src`` to a 9:16 mp4 at ``out_path``."""
     cmd = [
@@ -113,8 +106,6 @@ def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
         import yt_dlp
 
         opts = {
-            # Cap at 1080p: Nemotron analysis is <=1080p and clips are cropped from
-            # this, so 4K just wastes bandwidth + time.
             "format": (
                 "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/"
                 "b[height<=1080][ext=mp4]/b[height<=1080]/b"
@@ -125,9 +116,6 @@ def cut_clips(video_url: str, timestamps: list[dict]) -> list[str]:
             "no_warnings": True,
             "download_sections": [f"*{section_arg}"],
         }
-        proxy = _proxy()
-        if proxy:
-            opts["proxy"] = proxy
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([video_url])
