@@ -10,6 +10,9 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/opt/autoclipping
+# Hermes drains sessions for up to ~180s on stop; give it headroom so systemd
+# doesn't SIGKILL mid-drain (it warns if this is < drain_timeout + 30s).
+TimeoutStopSec=240
 # `hermes gateway` reads the bot token + allowlist from the PROCESS env; `hermes
 # gateway setup` writes them to ~/.hermes/.env, so load that file or the gateway
 # comes up "no messaging platforms enabled" (this is what start.sh's `set -a; . .env`
