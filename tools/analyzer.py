@@ -46,23 +46,24 @@ def _ensure_fal_key() -> None:
     )
     if not key:
         raise RuntimeError(
-            "FAL_KEY is not set. On the VPS, add it to the .env file on the host "
-            "(next to docker-compose.yml; see .env.example) and restart the "
-            "container:  docker compose restart app   ..."
-            "or in another deployment, set FAL_KEY in the process environment."
+            "FAL_KEY is not set. On the VPS, add it to the "
+            "mcp_servers.autoclipping.env: block in ~/.hermes/config.yaml "
+            "(see AGENTS.md §6), then `sudo systemctl restart hermes-gateway`. "
+            "Locally, set FAL_KEY in your shell or the .env file next to the code."
         )
     os.environ.setdefault("FAL_KEY", key)
 
 
 def _read_key_from_file() -> str | None:
-    """Best-effort: read FAL_KEY from a .env file in the working directory or /app.
+    """Best-effort: read FAL_KEY from a .env file in the working directory,
+    /opt/autoclipping, or the home dir.
 
-    Covers the case where compose ``env_file`` didn't populate the env for this
-    subprocess but the file is present on disk.
+    Covers the case where the Hermes mcp_servers ``env:`` block didn't populate the
+    env for this subprocess but the file is present on disk.
     """
     for candidate in (
         os.path.join(os.getcwd(), ".env"),
-        "/app/.env",
+        "/opt/autoclipping/.env",
         os.path.join(os.path.expanduser("~"), ".env"),
     ):
         try:

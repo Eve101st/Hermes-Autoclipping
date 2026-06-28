@@ -35,6 +35,6 @@ saved_model/**/* filter=lfs diff=lfs merge=lfs -text
 *tfevents* filter=lfs diff=lfs merge=lfs -text
 
 # --- Project additions ---
-# Force LF so shell scripts and the Dockerfile build correctly on the Linux
-# Hugging Face Spaces builder regardless of the OS the repo was authored on.
+# Force LF so shell scripts run correctly on the Linux VPS regardless of the OS the
+# repo was authored on.
 * text=auto eol=lf

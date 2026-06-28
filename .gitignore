@@ -1,4 +1,4 @@
-# Secrets — provided via docker-compose env_file on the VPS, never committed
+# Secrets — provided via the process environment on the VPS, never committed
 .env
 
 # Internal-only docs (host/account specifics + running status log) — kept local,
