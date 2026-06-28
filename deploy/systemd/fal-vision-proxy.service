@@ -1,0 +1,17 @@
+[Unit]
+# Loopback auth-rewrite proxy so Hermes' vision aux can reach fal's OpenAI-compatible
+# endpoint (Hermes sends Bearer; fal wants Key). Vision-only; stateless; stdlib python3.
+Description=fal vision auth-rewrite proxy (Bearer->Key) for Hermes vision
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Environment=FAL_PROXY_PORT=8089
+ExecStart=/usr/bin/python3 /opt/autoclipping/deploy/fal-vision-proxy.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
